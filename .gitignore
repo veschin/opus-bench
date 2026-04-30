@@ -1,0 +1,8 @@
+opus-bench.v1
+opus-bench.v2
+opus-bench.v2en
+*.bak
+*.tmp
+__pycache__/
+*.pyc
+.DS_Store
