@@ -1,0 +1,69 @@
+{
+  "_meta": {
+    "date": "2026-04-30T11:45:23.041963",
+    "models": [
+      "claude-opus-4-6",
+      "claude-opus-4-7"
+    ],
+    "tests": [
+      "reason",
+      "trace",
+      "bugs",
+      "behave"
+    ]
+  },
+  "opus-4-6": {
+    "score": 80,
+    "max": 100,
+    "pct": 80,
+    "cost": 0.42014524999999997,
+    "verdict": "SHARP"
+  },
+  "opus-4-6:reason": {
+    "cost": 0.11949425000000001,
+    "duration": 27526,
+    "tokens": 1902
+  },
+  "opus-4-6:trace": {
+    "cost": 0.06537349999999999,
+    "duration": 17521,
+    "tokens": 1027
+  },
+  "opus-4-6:bugs": {
+    "cost": 0.0991495,
+    "duration": 22935,
+    "tokens": 1046
+  },
+  "opus-4-6:behave": {
+    "cost": 0.13612799999999997,
+    "duration": 54068,
+    "tokens": 2487
+  },
+  "opus-4-7": {
+    "score": 80,
+    "max": 100,
+    "pct": 80,
+    "cost": 0.6099815,
+    "verdict": "SHARP"
+  },
+  "opus-4-7:reason": {
+    "cost": 0.13664425,
+    "duration": 17817,
+    "tokens": 1451
+  },
+  "opus-4-7:trace": {
+    "cost": 0.1166385,
+    "duration": 9433,
+    "tokens": 641
+  },
+  "opus-4-7:bugs": {
+    "cost": 0.12757949999999998,
+    "duration": 15320,
+    "tokens": 1039
+  },
+  "opus-4-7:behave": {
+    "cost": 0.22911925,
+    "duration": 76064,
+    "tokens": 5047
+  }
+}
