@@ -1,0 +1,87 @@
+{
+  "_meta": {
+    "date": "2026-04-30T12:07:05.009978",
+    "models": [
+      "claude-opus-4-6",
+      "claude-opus-4-7"
+    ],
+    "tests": [
+      "reason",
+      "trace",
+      "bugs",
+      "behave"
+    ]
+  },
+  "opus-4-6": {
+    "score": 80,
+    "max": 100,
+    "pct": 80,
+    "cost": 0.40108275000000004,
+    "thinking_chars": 2689,
+    "verdict": "SHARP"
+  },
+  "opus-4-6:reason": {
+    "cost": 0.11135675,
+    "duration": 23754,
+    "tokens": 1584,
+    "thinking_chars": 1404,
+    "visible_chars": 946
+  },
+  "opus-4-6:trace": {
+    "cost": 0.0935435,
+    "duration": 13612,
+    "tokens": 858,
+    "thinking_chars": 439,
+    "visible_chars": 636
+  },
+  "opus-4-6:bugs": {
+    "cost": 0.09180700000000001,
+    "duration": 18024,
+    "tokens": 759,
+    "thinking_chars": 759,
+    "visible_chars": 795
+  },
+  "opus-4-6:behave": {
+    "cost": 0.1043755,
+    "duration": 28568,
+    "tokens": 1224,
+    "thinking_chars": 87,
+    "visible_chars": 2740
+  },
+  "opus-4-7": {
+    "score": 40,
+    "max": 100,
+    "pct": 40,
+    "cost": 0.4933365,
+    "thinking_chars": 0,
+    "verdict": "DEGRADED"
+  },
+  "opus-4-7:reason": {
+    "cost": 0.11856425,
+    "duration": 11205,
+    "tokens": 726,
+    "thinking_chars": 0,
+    "visible_chars": 324
+  },
+  "opus-4-7:trace": {
+    "cost": 0.11216849999999999,
+    "duration": 8716,
+    "tokens": 462,
+    "thinking_chars": 0,
+    "visible_chars": 475
+  },
+  "opus-4-7:bugs": {
+    "cost": 0.1144245,
+    "duration": 10314,
+    "tokens": 513,
+    "thinking_chars": 0,
+    "visible_chars": 1031
+  },
+  "opus-4-7:behave": {
+    "cost": 0.14817925,
+    "duration": 35625,
+    "tokens": 1810,
+    "thinking_chars": 0,
+    "visible_chars": 3827
+  }
+}
