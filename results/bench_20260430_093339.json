@@ -1,0 +1,30 @@
+{
+  "_meta": {
+    "date": "2026-04-30T09:34:16.389276",
+    "model": "opus",
+    "total_score": 81,
+    "total_max": 100,
+    "pct": 81,
+    "verdict": "SHARP \u2705"
+  },
+  "reason": {
+    "cost": 0.12237924999999998,
+    "duration": 12293,
+    "tokens": 880
+  },
+  "trace": {
+    "cost": 0.11110850000000001,
+    "duration": 13366,
+    "tokens": 423
+  },
+  "bugs": {
+    "cost": 0.1192945,
+    "duration": 14428,
+    "tokens": 708
+  },
+  "behave": {
+    "cost": 0.15042425,
+    "duration": 34979,
+    "tokens": 1902
+  }
+}
