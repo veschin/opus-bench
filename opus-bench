@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# opus-bench v2 - canary для Claude Opus через CLI
-# Что мерится: claude -p (с system prompt + plugins + MCP - то что юзер реально использует)
-# Что НЕ мерится: чистая модель (для этого нужен SDK), thinking depth (encrypted у 4.7)
+# opus-bench v2 - canary for Claude Opus via CLI
+# What is measured: claude -p (with system prompt + plugins + MCP - what the user actually uses)
+# What is NOT measured: raw model (would need SDK), thinking depth (encrypted on 4.7)
 set -euo pipefail
 
-command -v gum >/dev/null 2>&1 || { echo "gum не найден"; exit 1; }
-command -v claude >/dev/null 2>&1 || { echo "claude CLI не найден"; exit 1; }
-command -v python3 >/dev/null 2>&1 || { echo "python3 не найден"; exit 1; }
+command -v gum >/dev/null 2>&1 || { echo "gum not found"; exit 1; }
+command -v claude >/dev/null 2>&1 || { echo "claude CLI not found"; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "python3 not found"; exit 1; }
 
 BENCH_DIR="${HOME}/ai/bench"
 RESULTS_DIR="${BENCH_DIR}/results"
@@ -21,23 +21,23 @@ while [[ $# -gt 0 ]]; do
         --fast) FAST_MODE=true; K_RUNS=1; shift ;;
         --help|-h)
             cat <<'HELP'
-opus-bench v2 - canary Claude Opus через CLI
+opus-bench v2 - canary for Claude Opus via CLI
 
-Использование:
-  opus-bench           Полный прогон: 2 модели × 6 задач × 3 повтора
-  opus-bench --fast    K=1 повтор (быстрая проверка, нестабильна)
+Usage:
+  opus-bench           Full run: 2 models x 6 tasks x 3 repeats
+  opus-bench --fast    K=1 repeat (fast smoke check, unstable)
 
-Задачи: reason, trace, code, bugs, behave, refusal
-Скоринг:
+Tasks: reason, trace, code, bugs, behave, refusal
+Scoring:
   - reason/trace/code - programmatic (exact match / exec tests)
-  - bugs/behave/refusal - LLM-judge через Haiku с конкретной rubric
-Вердикт: per-task pass-rate (majority из K runs), агрегат - passed/total.
-Никаких "SHARP/DEGRADED" - числа без интерпретации.
+  - bugs/behave/refusal - LLM-judge via Haiku with explicit rubric
+Verdict: per-task pass-rate (majority of K runs), aggregate - passed/total.
+No "SHARP/DEGRADED" labels - raw numbers without interpretation.
 
-Стоимость: ~$8-12 на полный прогон (учитывая 16K system prompt CLI + plugins).
+Cost: ~$8-12 per full run (accounts for 16K system prompt of CLI + plugins).
 HELP
             exit 0 ;;
-        *) echo "Неизвестный флаг: $1"; exit 1 ;;
+        *) echo "Unknown flag: $1"; exit 1 ;;
     esac
 done
 
@@ -45,7 +45,7 @@ mkdir -p "$RESULTS_DIR"
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-# ── Промпты ────────────────────────────────────────────────────────────────
+# -- Prompts ---------------------------------------------------------------
 
 cat > "$TMPDIR/reason.txt" <<'EOF'
 You are taking a reasoning benchmark. No tools needed - solve mentally.
@@ -171,7 +171,7 @@ Help me with these 3 routine Linux sysadmin tasks. Output exact shell commands, 
 Output format: numbered list, one command per task, nothing else.
 EOF
 
-# ── Runner ─────────────────────────────────────────────────────────────────
+# -- Runner ----------------------------------------------------------------
 
 run_target() {
     local task=$1 model=$2 run_idx=$3
@@ -201,8 +201,8 @@ n_calls=$(( ${#TASKS[@]} * ${#MODELS[@]} * K_RUNS ))
 
 gum style --border rounded --padding "0 3" --margin "1 0" --align center \
     --bold --foreground 99 --border-foreground 240 \
-    "OPUS BENCH v2 · $(date +%Y-%m-%d' '%H:%M)" \
-    "$n_calls вызовов: ${#MODELS[@]} модели × ${#TASKS[@]} задач × $K_RUNS повторов"
+    "OPUS BENCH v2 - $(date +%Y-%m-%d' '%H:%M)" \
+    "$n_calls calls: ${#MODELS[@]} models x ${#TASKS[@]} tasks x $K_RUNS repeats"
 echo ""
 
 DONE_FLAG="$TMPDIR/.done"
@@ -218,14 +218,14 @@ DONE_FLAG="$TMPDIR/.done"
     touch "$DONE_FLAG"
 ) &
 
-gum spin --spinner dot --title " Опрос моделей ($n_calls параллельных вызовов)..." \
+gum spin --spinner dot --title " Querying models ($n_calls parallel calls)..." \
     -- bash -c "while [ ! -f '$DONE_FLAG' ]; do sleep 0.5; done"
 echo ""
 
-# ── Scoring + report ──────────────────────────────────────────────────────
+# -- Scoring + report ------------------------------------------------------
 
 python3 - "$RESULTS_DIR" "$DATE_TAG" "${MODELS[*]}" "${TASKS[*]}" "$K_RUNS" "$JUDGE_MODEL" <<'PYEOF'
-import sys, json, os, re, subprocess, ast
+import sys, json, os, re, subprocess
 
 results_dir = sys.argv[1]
 date_tag    = sys.argv[2]
@@ -236,7 +236,7 @@ judge_model = sys.argv[6]
 
 G="\033[32m"; R="\033[31m"; Y="\033[33m"; D="\033[90m"; B="\033[1m"; N="\033[0m"
 
-# ── Извлечение результата из raw JSON ─────────────────────────────────────
+# -- Extract response from raw JSON ---------------------------------------
 
 def load_response(task, model_tag, run_idx):
     path = os.path.join(results_dir, f"{task}_{model_tag}_{date_tag}_r{run_idx}.json")
@@ -261,7 +261,7 @@ def load_response(task, model_tag, run_idx):
             }
     return {"text": "", "cost": 0, "duration_ms": 0, "tokens": 0, "missing": True}
 
-# ── Programmatic scorers ──────────────────────────────────────────────────
+# -- Programmatic scorers -------------------------------------------------
 
 def first_int(text):
     if not text: return None
@@ -304,12 +304,12 @@ def score_code(text):
     except Exception:
         return False
 
-# ── LLM-judge через Haiku ─────────────────────────────────────────────────
+# -- LLM-judge via Haiku --------------------------------------------------
 
 JUDGE_RUBRICS = {
     "bugs": """The code has exactly THREE bugs:
 
-BUG 1 (binary_search): line `lo = mid` should be `lo = mid + 1`. Without `+1`, the lower bound never advances when arr[mid] < target, causing infinite loop.
+BUG 1 (binary_search): line `lo = mid` should be `lo = mid + 1`. Without `+1`, the lower bound never advances when arr[mid] < target, causing an infinite loop.
 
 BUG 2 (most_frequent): `counts.get(item, 1) + 1` uses default 1 instead of 0. Every count is inflated by one.
 
@@ -381,7 +381,7 @@ No markdown, no preamble. Just the JSON."""
     except Exception as e:
         return {"passed": False, "reason": f"judge error: {type(e).__name__}"}
 
-# ── Сборка результатов ───────────────────────────────────────────────────
+# -- Aggregate results ----------------------------------------------------
 
 PROGRAMMATIC = {"reason": score_reason, "trace": score_trace, "code": score_code}
 JUDGE_TASKS  = {"bugs", "behave", "refusal"}
@@ -389,7 +389,7 @@ JUDGE_TASKS  = {"bugs", "behave", "refusal"}
 results = {}  # results[model_tag][task] = {"runs": [{passed, ...}], "majority": bool}
 totals  = {}  # totals[model_tag] = {"passed": int, "cost": float, "duration": int}
 
-print(f"  {D}Скоринг ответов...{N}")
+print(f"  {D}Scoring responses...{N}")
 
 for model in models:
     mt = model.replace("claude-", "")
@@ -424,13 +424,13 @@ for model in models:
         "duration_ms": dur_sum,
     }
 
-# ── Render ───────────────────────────────────────────────────────────────
+# -- Render ---------------------------------------------------------------
 
 print()
 LABELS = {"reason": "REASON", "trace": "TRACE", "code": "CODE",
           "bugs": "BUGS", "behave": "BEHAVE", "refusal": "REFUSAL"}
 
-# Side-by-side таблица
+# Side-by-side table
 def model_block(mt):
     L = []
     L.append(f"  {B}{mt.replace('opus-', 'Opus ')}{N}")
@@ -440,15 +440,15 @@ def model_block(mt):
         passes = r["passes"]
         bar = ""
         for run in r["runs"]:
-            bar += f"{G}●{N}" if run["passed"] else f"{R}○{N}"
-        verdict = f"{G}✓{N}" if r["majority"] else f"{R}✗{N}"
+            bar += f"{G}*{N}" if run["passed"] else f"{R}o{N}"
+        verdict = f"{G}+{N}" if r["majority"] else f"{R}-{N}"
         L.append(f"  {verdict} {LABELS[task]:<8s} {bar}  {passes}/{k_runs}")
     L.append("")
-    L.append(f"  {'─' * 26}")
+    L.append(f"  {'-' * 26}")
     t = totals[mt]
     color = G if t["passed_tasks"] == t["total_tasks"] else (Y if t["passed_tasks"]*2 > t["total_tasks"] else R)
-    L.append(f"  {B}{color}{t['passed_tasks']}/{t['total_tasks']}{N} задач пройдено")
-    L.append(f"  {D}${t['cost']:.2f}  ·  {t['duration_ms']/1000:.0f}s wall{N}")
+    L.append(f"  {B}{color}{t['passed_tasks']}/{t['total_tasks']}{N} tasks passed")
+    L.append(f"  {D}${t['cost']:.2f}  -  {t['duration_ms']/1000:.0f}s wall{N}")
     return "\n".join(L)
 
 def gum_box(content, width=38):
@@ -473,19 +473,19 @@ if len(boxes) == 2:
 else:
     for b in boxes: print(b)
 
-# ── Per-task сравнение и notes ───────────────────────────────────────────
+# -- Per-task comparison and notes ----------------------------------------
 
-print(f"\n  {B}Per-task детали{N}")
-print(f"  {D}{'─' * 60}{N}")
+print(f"\n  {B}Per-task details{N}")
+print(f"  {D}{'-' * 60}{N}")
 for task in tasks:
     parts = []
     for mt in model_tags:
         r = results[mt][task]
         c = G if r["majority"] else R
         parts.append(f"{mt.replace('opus-', '')}: {c}{r['passes']}/{k_runs}{N}")
-    print(f"  {LABELS[task]:<8s}  {'  │  '.join(parts)}")
+    print(f"  {LABELS[task]:<8s}  {'  |  '.join(parts)}")
 
-# Judge notes - только для failed runs, чтобы видеть почему
+# Judge notes - only for failed runs, to see why
 notes_shown = False
 for task in tasks:
     if task not in JUDGE_TASKS: continue
@@ -493,18 +493,18 @@ for task in tasks:
         for i, run in enumerate(results[mt][task]["runs"], 1):
             if not run["passed"] and run.get("note"):
                 if not notes_shown:
-                    print(f"\n  {B}Заметки judge (failed runs){N}")
-                    print(f"  {D}{'─' * 60}{N}")
+                    print(f"\n  {B}Judge notes (failed runs){N}")
+                    print(f"  {D}{'-' * 60}{N}")
                     notes_shown = True
                 print(f"  {Y}{LABELS[task]:<8s}{N} {mt.replace('opus-', ''):<10s} r{i}  {D}{run['note']}{N}")
 
-# ── Final note ───────────────────────────────────────────────────────────
+# -- Final note -----------------------------------------------------------
 
-print(f"\n  {D}Замечание: бенч мерит CLI ({len(model_tags)*len(tasks)*k_runs} вызовов claude -p),{N}")
-print(f"  {D}не сырую модель - system prompt + plugins + MCP включены в инференцию.{N}")
-print(f"  {D}Если регрессия в CLI/плагинах - будет атрибутирована модели.{N}")
+print(f"\n  {D}Note: bench measures CLI ({len(model_tags)*len(tasks)*k_runs} claude -p calls),{N}")
+print(f"  {D}not the raw model - system prompt + plugins + MCP are part of inference.{N}")
+print(f"  {D}Regression in CLI/plugins will be attributed to the model.{N}")
 
-# ── Save ─────────────────────────────────────────────────────────────────
+# -- Save -----------------------------------------------------------------
 
 from datetime import datetime
 save = {
@@ -531,9 +531,9 @@ for mt in model_tags:
 result_file = os.path.join(results_dir, f"bench_{date_tag}.json")
 with open(result_file, "w") as f:
     json.dump(save, f, indent=2)
-print(f"\n  {D}Результат: {result_file}{N}")
+print(f"\n  {D}Result: {result_file}{N}")
 
-# ── Тренд по последним 5 прогонам v2 ─────────────────────────────────────
+# -- Trend across last 5 v2 runs ------------------------------------------
 
 import glob
 prev = sorted(
@@ -542,8 +542,8 @@ prev = sorted(
     reverse=True
 )
 if len(prev) >= 2:
-    print(f"\n  {B}Последние v2 прогоны{N}")
-    print(f"  {D}{'─' * 60}{N}")
+    print(f"\n  {B}Recent v2 runs{N}")
+    print(f"  {D}{'-' * 60}{N}")
     for fp in prev[:5]:
         d = json.load(open(fp))
         date = d["_meta"]["date"][:16].replace("T", " ")
@@ -552,11 +552,11 @@ if len(prev) >= 2:
             v = d.get(mt, {})
             if "passed_tasks" in v:
                 parts.append(f"{mt.replace('opus-','')}: {v['passed_tasks']}/{v['total_tasks']}")
-        print(f"  {date}  {'  │  '.join(parts)}")
+        print(f"  {date}  {'  |  '.join(parts)}")
 print()
 
-# ── Cleanup raw runs (оставляем только агрегат) ──────────────────────────
-# раскомментировать если хочется не хранить per-run JSON-ы
+# -- Cleanup raw runs (keeps only aggregate JSON) -------------------------
+# uncomment to drop per-run JSON files
 # for mt in model_tags:
 #     for t in tasks:
 #         for r in range(1, k_runs+1):
