@@ -12,8 +12,10 @@ command -v python3 >/dev/null 2>&1 || { echo "python3 not found"; exit 1; }
 BENCH_DIR="${HOME}/ai/bench"
 RESULTS_DIR="${BENCH_DIR}/results"
 DATE_TAG=$(date +%Y%m%d_%H%M%S)
-MODELS=("claude-opus-4-6" "claude-opus-4-7")
+MODELS=("claude-opus-4-6" "claude-opus-4-7" "glm-5.1")
 JUDGE_MODEL="claude-sonnet-4-6"
+ZAI_BASE_URL="https://api.z.ai/api/anthropic"
+ZAI_KEY_FILE="${HOME}/.config/GoLeM/zai_api_key"
 K_RUNS=3
 FAST_MODE=false
 VERBOSE=false
@@ -190,20 +192,39 @@ EOF
 run_target() {
     local task=$1 model=$2 run_idx=$3
     local model_tag="${model#claude-}"
+    if [[ "$model" != claude-* ]]; then
+        model_tag="$model"
+    fi
     local raw_file="${RESULTS_DIR}/${task}_${model_tag}_${DATE_TAG}_r${run_idx}.json"
     local prompt
     prompt=$(<"$TMPDIR/${task}.txt")
 
-    claude -p "$prompt" \
-        --output-format json \
-        --model "$model" \
-        --tools "" \
-        --no-session-persistence \
-        --max-budget-usd 0.50 \
-        > "$raw_file" 2>/dev/null || true
+    if [[ "$model" == glm-* ]]; then
+        if [[ ! -f "$ZAI_KEY_FILE" ]]; then
+            echo "{\"_bench_error\":\"missing $ZAI_KEY_FILE\"}" > "$raw_file"
+            return
+        fi
+        ANTHROPIC_BASE_URL="$ZAI_BASE_URL" \
+        ANTHROPIC_API_KEY="$(cat "$ZAI_KEY_FILE")" \
+        claude -p "$prompt" \
+            --output-format json \
+            --model "$model" \
+            --tools "" \
+            --no-session-persistence \
+            --max-budget-usd 0.50 \
+            > "$raw_file" 2>/dev/null || true
+    else
+        claude -p "$prompt" \
+            --output-format json \
+            --model "$model" \
+            --tools "" \
+            --no-session-persistence \
+            --max-budget-usd 0.50 \
+            > "$raw_file" 2>/dev/null || true
+    fi
 }
 export -f run_target
-export RESULTS_DIR DATE_TAG TMPDIR
+export RESULTS_DIR DATE_TAG TMPDIR ZAI_BASE_URL ZAI_KEY_FILE
 
 if $FAST_MODE; then
     TASKS=(reason trace code)
@@ -409,7 +430,7 @@ def call_polyrubric(task_text, response_text):
 
 # -- Final analyst --------------------------------------------------------
 
-ANALYST_TEMPLATE = '''You analyze a Claude Opus benchmark. Two models, {n_tasks} tasks x {k} runs each.
+ANALYST_TEMPLATE = '''You analyze a Claude Opus + Z.AI benchmark. {n_models} models, {n_tasks} tasks x {k} runs each. The same Sonnet judge evaluated all models, so judge bias is uniform across them. Anthropic Opus and Z.AI GLM are evaluated head-to-head as peer reasoning models.
 
 SCALES:
 - correctness, depth: 0-10, HIGHER = better
@@ -425,17 +446,23 @@ DATA:
 ```
 
 Output EXACTLY this format (no prose before, no prose after, no markdown fences):
-USE: <claude-opus-4-6 | claude-opus-4-7 | tie>
+USE: <{model_options} | tie>
 - <one-sentence reason citing a metric>
 - <one-sentence reason citing a metric>
 - <optional third reason>
 
-Pick the model with better thinking effort + depth + lower defects + maintained correctness. If essentially equal, USE: tie. If one is clearly broken (correctness drop, severe defect surge), the other wins. If both broken, USE: neither and explain.
+Pick the model with better thinking effort + depth + lower defects + maintained correctness. If essentially equal, USE: tie. If one is clearly broken (correctness drop, severe defect surge), pick the best of the rest. If all broken, USE: none and explain.
 '''
 
 def call_analyst(aggregates):
     payload = json.dumps(aggregates, indent=2, ensure_ascii=False)
-    prompt = ANALYST_TEMPLATE.format(n_tasks=len(tasks), k=k_runs, data=payload[:8000])
+    prompt = ANALYST_TEMPLATE.format(
+        n_models=len(models),
+        n_tasks=len(tasks),
+        k=k_runs,
+        data=payload[:8000],
+        model_options=" | ".join(models),
+    )
     # NB: explicit ban on external references is in ANALYST_TEMPLATE
     try:
         proc = subprocess.run(
@@ -565,18 +592,19 @@ if verbose:
     print(f"  {D}{'-' * 72}{N}")
     header = f"  {'task':<10s}"
     for mt in model_tags:
-        header += f"  {mt:>10s}"
-    header += f"  {'ratio 4-6/4-7':>16s}"
+        header += f"  {mt:>12s}"
+    if len(model_tags) == 2:
+        header += f"  {'ratio[0]/[1]':>14s}"
     print(header)
     for t in tasks:
         line = f"  {LABELS[t]:<10s}"
         vals = [agg[mt][t]["thinking_tokens"] for mt in model_tags]
         for v in vals:
-            line += f"  {int(v):>10d}"
+            line += f"  {int(v):>12d}"
         if len(vals) == 2 and vals[1] > 0:
             ratio = vals[0] / vals[1]
             col = G if 0.7 <= ratio <= 1.3 else (Y if 0.5 <= ratio <= 2.0 else R)
-            line += f"  {col}{ratio:>15.2f}x{N}"
+            line += f"  {col}{ratio:>13.2f}x{N}"
         print(line)
 
     print(f"\n  {B}Duration (ms, median){N}")
@@ -584,7 +612,7 @@ if verbose:
     for t in tasks:
         line = f"  {LABELS[t]:<10s}"
         for mt in model_tags:
-            line += f"  {int(agg[mt][t]['duration_ms']):>10d}"
+            line += f"  {int(agg[mt][t]['duration_ms']):>12d}"
         print(line)
 
 # -- Render: defects heatmap ----------------------------------------------
@@ -599,15 +627,16 @@ if verbose:
     print(f"\n  {B}Defect profile (mean per axis, 0=clean, 10=severe){N}")
     print(f"  {D}{'-' * 72}{N}")
     hdr = f"  {'defect':<14s}"
-    for mt in model_tags: hdr += f"  {mt:>10s}"
-    hdr += f"  {'delta':>10s}"
+    for mt in model_tags: hdr += f"  {mt:>12s}"
+    if len(model_tags) == 2:
+        hdr += f"  {'delta':>10s}"
     print(hdr)
     for a in DEFECT_AXES:
         line = f"  {a:<14s}"
         vals = [per_model[mt]["defect_means"][a] for mt in model_tags]
         for v in vals:
             c = heat_color(v)
-            line += f"  {c}{v:>10.2f}{N}"
+            line += f"  {c}{v:>12.2f}{N}"
         if len(vals) == 2:
             d = vals[0] - vals[1]
             sign = "+" if d > 0 else ""
@@ -673,7 +702,7 @@ print(panel if panel.strip() else verdict_text)
 
 vprint(f"\n  {D}Note: bench measures CLI ({len(model_tags)*len(tasks)*k_runs} claude -p calls){N}")
 vprint(f"  {D}with system prompt + plugins + MCP. Regression in CLI is attributed to model.{N}")
-vprint(f"  {D}Judge: {judge_model} (pinned). Cross-judge bias is uniform across both models.{N}")
+vprint(f"  {D}Judge: {judge_model} via Anthropic (pinned). Same judge for all targets.{N}")
 
 # -- Save -----------------------------------------------------------------
 
@@ -706,16 +735,20 @@ prev = sorted(
 if verbose and len(prev) >= 2:
     print(f"\n  {B}Recent v3 runs{N}")
     print(f"  {D}{'-' * 72}{N}")
-    print(f"  {'date':<18s}  {'4-6 think':>10s}  {'4-7 think':>10s}  {'4-6 corr':>9s}  {'4-7 corr':>9s}")
+    hdr = f"  {'date':<18s}"
+    for mt in model_tags:
+        hdr += f"  {mt+' think':>16s}  {mt+' corr':>12s}"
+    print(hdr)
     for fp in prev[:5]:
         d = json.load(open(fp))
         date = d["_meta"]["date"][:16].replace("T", " ")
         pm = d.get("per_model", {})
-        if "opus-4-6" in pm and "opus-4-7" in pm:
-            t6 = pm["opus-4-6"].get("mean_thinking_tokens", 0)
-            t7 = pm["opus-4-7"].get("mean_thinking_tokens", 0)
-            c6 = pm["opus-4-6"].get("mean_correctness", 0)
-            c7 = pm["opus-4-7"].get("mean_correctness", 0)
-            print(f"  {date:<18s}  {int(t6):>10d}  {int(t7):>10d}  {c6:>8.1f}  {c7:>8.1f}")
+        line = f"  {date:<18s}"
+        for mt in model_tags:
+            v = pm.get(mt, {})
+            think = v.get("mean_thinking_tokens", 0) or 0
+            corr  = v.get("mean_correctness", 0) or 0
+            line += f"  {int(think):>16d}  {corr:>11.1f}"
+        print(line)
 print()
 PYEOF

@@ -1,13 +1,16 @@
 # opus-bench
 
-Daily canary monitoring for Anthropic's Claude Opus models, run through the
-`claude` CLI to mirror what the user actually invokes (system prompt + plugins
-+ MCP servers included in every call).
+Daily canary monitoring for frontier reasoning models, run through the
+`claude` CLI to mirror what the user actually invokes (system prompt +
+plugins + MCP servers included in every call). Targets Claude Opus 4.6,
+Claude Opus 4.7 and Z.AI GLM-5.1 head-to-head; Sonnet on Anthropic
+serves as a uniform judge.
 
 ## What it measures
 
-Compares Claude Opus 4.6 and 4.7 across six tasks (`reason`, `trace`, `code`,
-`bugs`, `behave`, `refusal`) with `K=3` repeats per (task × model). Three
+Compares the three target models across six tasks (`reason`, `trace`,
+`code`, `bugs`, `behave`, `refusal`) with `K=3` repeats per
+(task x model). Three
 scoring layers per response:
 
 1. **Programmatic correctness** - exact match for math/trace, executed unit
@@ -83,9 +86,9 @@ and Sonnet - the bench makes about 73 API calls per full run.
 ./opus-bench --help
 ```
 
-Cost per full run: roughly $10-14 (36 Opus + 36 Sonnet polyrubric +
-1 analyst).
-Wall time: 7-10 minutes with parallelism.
+Cost per full run: roughly $14-20 (36 Opus + 18 GLM via Z.AI +
+54 Sonnet polyrubric + 1 analyst).
+Wall time: 8-12 minutes with parallelism.
 
 ## Output
 
