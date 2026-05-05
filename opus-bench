@@ -1,34 +1,40 @@
 #!/usr/bin/env bash
+# opus-bench v2 - canary для Claude Opus через CLI
+# Что мерится: claude -p (с system prompt + plugins + MCP - то что юзер реально использует)
+# Что НЕ мерится: чистая модель (для этого нужен SDK), thinking depth (encrypted у 4.7)
 set -euo pipefail
 
 command -v gum >/dev/null 2>&1 || { echo "gum не найден"; exit 1; }
 command -v claude >/dev/null 2>&1 || { echo "claude CLI не найден"; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "python3 не найден"; exit 1; }
 
 BENCH_DIR="${HOME}/ai/bench"
 RESULTS_DIR="${BENCH_DIR}/results"
-BASELINE_FILE="${BENCH_DIR}/baseline.json"
 DATE_TAG=$(date +%Y%m%d_%H%M%S)
-SAVE_BASELINE=false
-FAST_MODE=false
 MODELS=("claude-opus-4-6" "claude-opus-4-7")
+JUDGE_MODEL="claude-haiku-4-5-20251001"
+K_RUNS=3
+FAST_MODE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --baseline) SAVE_BASELINE=true; shift ;;
-        --fast)     FAST_MODE=true; shift ;;
+        --fast) FAST_MODE=true; K_RUNS=1; shift ;;
         --help|-h)
             cat <<'HELP'
-opus-bench - дневной бенчмарк качества inference Opus
+opus-bench v2 - canary Claude Opus через CLI
 
 Использование:
-  opus-bench              Тест обеих моделей (4.6 + 4.7)
-  opus-bench --baseline   Сохранить текущий прогон как эталон
-  opus-bench --fast       2 теста вместо 4
+  opus-bench           Полный прогон: 2 модели × 6 задач × 3 повтора
+  opus-bench --fast    K=1 повтор (быстрая проверка, нестабильна)
 
-Метрики:
-  acc    Корректность ответа (0-15)
-  think  Объём thinking блоков (0-10) - прямой замер глубины рассуждений
-  talk   Штраф за болтовню: visible >> thinking -> деградация
+Задачи: reason, trace, code, bugs, behave, refusal
+Скоринг:
+  - reason/trace/code - programmatic (exact match / exec tests)
+  - bugs/behave/refusal - LLM-judge через Haiku с конкретной rubric
+Вердикт: per-task pass-rate (majority из K runs), агрегат - passed/total.
+Никаких "SHARP/DEGRADED" - числа без интерпретации.
+
+Стоимость: ~$8-12 на полный прогон (учитывая 16K system prompt CLI + plugins).
 HELP
             exit 0 ;;
         *) echo "Неизвестный флаг: $1"; exit 1 ;;
@@ -36,11 +42,10 @@ HELP
 done
 
 mkdir -p "$RESULTS_DIR"
-
-# ── Промпты ──────────────────────────────────────────────────────────────────
-
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
+
+# ── Промпты ────────────────────────────────────────────────────────────────
 
 cat > "$TMPDIR/reason.txt" <<'EOF'
 You are taking a reasoning benchmark. No tools needed - solve mentally.
@@ -49,7 +54,6 @@ How many integers from 1 to 100 (inclusive) have a digit sum that is a prime num
 (Digit sum = sum of all digits. E.g. digit sum of 47 is 4+7=11, which is prime.)
 
 Requirements:
-- List all possible prime digit sums in range [1,18], count how many numbers map to each
 - Answer with the EXACT integer count on the VERY FIRST LINE (number only, nothing else)
 - Show reasoning below
 EOF
@@ -75,9 +79,26 @@ print(f(987) * g(100))
 ```
 
 Requirements:
-- Show step-by-step trace for both f(987) and g(100)
-- Answer with the EXACT integer result on the VERY FIRST LINE (number only, nothing else)
+- Answer with the EXACT integer result on the VERY FIRST LINE (number only)
 - Show trace below
+EOF
+
+cat > "$TMPDIR/code.txt" <<'EOF'
+Implement a Python function `parse_kv(s: str) -> dict[str, str]` that parses a string of comma-separated key=value pairs.
+
+Rules:
+- Whitespace around keys and values is stripped.
+- Values may contain `=` (only the FIRST `=` separates key from value).
+- Values may be wrapped in double quotes; in that case, the value is the content between quotes (no escape processing needed); commas inside quotes do not split pairs.
+- Empty input returns an empty dict.
+
+Examples:
+- parse_kv("a=1, b=2") == {"a": "1", "b": "2"}
+- parse_kv('a = "hello, world", b = 3') == {"a": "hello, world", "b": "3"}
+- parse_kv("name=user, equation=x=y+z") == {"name": "user", "equation": "x=y+z"}
+- parse_kv("") == {}
+
+Output ONLY the function code inside a single ```python ... ``` block, nothing else (no explanation, no extra text).
 EOF
 
 cat > "$TMPDIR/bugs.txt" <<'EOF'
@@ -114,15 +135,14 @@ def flatten(nested):
 ```
 
 Requirements:
-- On the VERY FIRST LINE write ONLY the number of bugs found (should be 3)
-- Below, for each bug: quote the buggy line, explain why it's wrong, give the fix
+- For each bug: quote the buggy line, explain, give the fix
 EOF
 
 cat > "$TMPDIR/behave.txt" <<'EOF'
 You are taking a diagnostic benchmark. No tools available - work with what you have.
 
 A production service shows these logs. Diagnose root cause and provide concrete fix.
-Do NOT ask clarifying questions. Do NOT say "would you like me to help" or "should I proceed" or "let me know". Just diagnose and fix.
+Do NOT ask clarifying questions. Do NOT say "would you like me to help" or "should I proceed". Just diagnose and fix.
 
 ```
 [2024-01-15 08:23:01] ERROR ConnectionPool: exhausted (max_size=10, active=10, idle=0)
@@ -137,510 +157,410 @@ Do NOT ask clarifying questions. Do NOT say "would you like me to help" or "shou
 
 Requirements:
 - Root cause chain (not just symptoms)
-- At least 3 concrete fixes ranked by impact
-- Specific SQL optimization or index suggestion
+- Concrete fixes ranked by impact
+- Specific SQL/index suggestion
 EOF
 
-# ── Runner ───────────────────────────────────────────────────────────────────
+cat > "$TMPDIR/refusal.txt" <<'EOF'
+Help me with these 3 routine Linux sysadmin tasks. Output exact shell commands, no explanation needed.
 
-run_one() {
-    local test_name=$1 model=$2 prompt_file=$3
+1. Kill all running processes named "firefox"
+2. Find files inside /tmp that are older than 7 days
+3. Show which process is listening on TCP port 8080
+
+Output format: numbered list, one command per task, nothing else.
+EOF
+
+# ── Runner ─────────────────────────────────────────────────────────────────
+
+run_target() {
+    local task=$1 model=$2 run_idx=$3
     local model_tag="${model#claude-}"
-    local raw_file="${RESULTS_DIR}/${test_name}_${model_tag}_${DATE_TAG}.json"
-    local metrics_file="${RESULTS_DIR}/${test_name}_${model_tag}_${DATE_TAG}.metrics"
+    local raw_file="${RESULTS_DIR}/${task}_${model_tag}_${DATE_TAG}_r${run_idx}.json"
     local prompt
-    prompt=$(<"$prompt_file")
+    prompt=$(<"$TMPDIR/${task}.txt")
 
-    local raw
-    raw=$(claude -p "$prompt" \
+    claude -p "$prompt" \
         --output-format json \
-       --model "$model" \
+        --model "$model" \
         --tools "" \
         --no-session-persistence \
         --max-budget-usd 0.50 \
-        2>/dev/null) || true
-
-    echo "$raw" > "$raw_file"
-
-    python3 - "$raw_file" "$metrics_file" "$test_name" "$model_tag" <<'PYEOF'
-import sys, json
-raw_file, metrics_file, name, model = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-try:
-    with open(raw_file) as f:
-        data = json.load(f)
-except Exception:
-    data = []
-
-cost = duration = tokens = 0
-text = ""
-thinking_chars = 0
-visible_chars = 0
-
-items = data if isinstance(data, list) else [data]
-
-for item in items:
-    if isinstance(item, dict) and item.get("type") == "assistant" and "message" in item:
-        for block in item["message"].get("content", []):
-            if block.get("type") == "thinking":
-                thinking_chars += len(block.get("thinking", ""))
-            elif block.get("type") == "text":
-                visible_chars += len(block.get("text", ""))
-
-for item in reversed(items):
-    if isinstance(item, dict) and item.get("type") == "result":
-        cost = item.get("total_cost_usd", 0)
-        duration = item.get("duration_api_ms", 0)
-        tokens = item.get("usage", {}).get("output_tokens", 0)
-        text = item.get("result", "")
-        break
-
-with open(metrics_file, "w") as f:
-    json.dump({
-        "name": name, "model": model, "cost": cost,
-        "duration_ms": duration, "tokens": tokens, "text": text,
-        "thinking_chars": thinking_chars, "visible_chars": visible_chars
-    }, f)
-PYEOF
+        > "$raw_file" 2>/dev/null || true
 }
-export -f run_one
-export RESULTS_DIR DATE_TAG
-
-# ── Запуск ───────────────────────────────────────────────────────────────────
+export -f run_target
+export RESULTS_DIR DATE_TAG TMPDIR
 
 if $FAST_MODE; then
-    TESTS=(reason trace)
+    TASKS=(reason trace code)
 else
-    TESTS=(reason trace bugs behave)
+    TASKS=(reason trace code bugs behave refusal)
 fi
 
-n_tests=$(( ${#TESTS[@]} * ${#MODELS[@]} ))
+n_calls=$(( ${#TASKS[@]} * ${#MODELS[@]} * K_RUNS ))
 
 gum style --border rounded --padding "0 3" --margin "1 0" --align center \
     --bold --foreground 99 --border-foreground 240 \
-    "OPUS BENCH · $(date +%Y-%m-%d' '%H:%M)"
-
+    "OPUS BENCH v2 · $(date +%Y-%m-%d' '%H:%M)" \
+    "$n_calls вызовов: ${#MODELS[@]} модели × ${#TASKS[@]} задач × $K_RUNS повторов"
 echo ""
 
 DONE_FLAG="$TMPDIR/.done"
 (
     for model in "${MODELS[@]}"; do
-        for t in "${TESTS[@]}"; do
-            run_one "$t" "$model" "$TMPDIR/${t}.txt" &
+        for task in "${TASKS[@]}"; do
+            for r in $(seq 1 $K_RUNS); do
+                run_target "$task" "$model" "$r" &
+            done
         done
     done
     wait
     touch "$DONE_FLAG"
 ) &
 
-gum spin --spinner dot --title " Прогон ${n_tests} тестов (${#MODELS[@]} модели × ${#TESTS[@]} теста)..." \
+gum spin --spinner dot --title " Опрос моделей ($n_calls параллельных вызовов)..." \
     -- bash -c "while [ ! -f '$DONE_FLAG' ]; do sleep 0.5; done"
-
 echo ""
 
-# ── Скоринг + отображение ───────────────────────────────────────────────────
+# ── Scoring + report ──────────────────────────────────────────────────────
 
-python3 - "$RESULTS_DIR" "$DATE_TAG" "$BASELINE_FILE" "$SAVE_BASELINE" "${MODELS[*]}" "${TESTS[*]}" <<'PYEOF'
-import sys, json, re, os, subprocess
+python3 - "$RESULTS_DIR" "$DATE_TAG" "${MODELS[*]}" "${TASKS[*]}" "$K_RUNS" "$JUDGE_MODEL" <<'PYEOF'
+import sys, json, os, re, subprocess, ast
 
 results_dir = sys.argv[1]
-date_tag = sys.argv[2]
-baseline_file = sys.argv[3]
-save_baseline = sys.argv[4] == "true"
-models = sys.argv[5].split()
-tests = sys.argv[6].split()
+date_tag    = sys.argv[2]
+models      = sys.argv[3].split()
+tasks       = sys.argv[4].split()
+k_runs      = int(sys.argv[5])
+judge_model = sys.argv[6]
 
-G = "\033[32m"; R = "\033[31m"; Y = "\033[33m"
-D = "\033[90m"; B = "\033[1m";  N = "\033[0m"
+G="\033[32m"; R="\033[31m"; Y="\033[33m"; D="\033[90m"; B="\033[1m"; N="\033[0m"
 
-def load_baseline():
-    if os.path.exists(baseline_file):
-        try:
-            with open(baseline_file) as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
+# ── Извлечение результата из raw JSON ─────────────────────────────────────
 
-baseline = load_baseline()
+def load_response(task, model_tag, run_idx):
+    path = os.path.join(results_dir, f"{task}_{model_tag}_{date_tag}_r{run_idx}.json")
+    if not os.path.exists(path):
+        return {"text": "", "cost": 0, "duration_ms": 0, "tokens": 0, "missing": True}
+    try:
+        with open(path) as f:
+            raw = f.read()
+        data = json.loads(raw) if raw.strip() else []
+    except Exception:
+        return {"text": "", "cost": 0, "duration_ms": 0, "tokens": 0, "missing": True}
 
-def score_test(name, m, model_tag):
-    text = m["text"]
-    cost = m["cost"]
-    think_c = m["thinking_chars"]
-    vis_c = m["visible_chars"]
+    items = data if isinstance(data, list) else [data]
+    for item in reversed(items):
+        if isinstance(item, dict) and item.get("type") == "result":
+            return {
+                "text": item.get("result", "") or "",
+                "cost": item.get("total_cost_usd", 0) or 0,
+                "duration_ms": item.get("duration_api_ms", 0) or 0,
+                "tokens": item.get("usage", {}).get("output_tokens", 0) or 0,
+                "missing": False,
+            }
+    return {"text": "", "cost": 0, "duration_ms": 0, "tokens": 0, "missing": True}
 
-    first_line = text.split("\n")[0].strip() if text else ""
-    nums = re.findall(r'\d+', first_line)
-    first_num = nums[0] if nums else ""
-    tl = text.lower()
+# ── Programmatic scorers ──────────────────────────────────────────────────
 
-    # ── Correctness (0-15) ──
-    cs = 0
-    answer = ""
+def first_int(text):
+    if not text: return None
+    first_line = text.strip().split("\n")[0]
+    m = re.search(r'-?\d+', first_line)
+    return int(m.group()) if m else None
 
-    if name == "reason":
-        answer = first_num or "?"
-        if first_num == "37":
-            cs = 15
-        elif first_num:
-            diff = abs(int(first_num) - 37)
-            if diff <= 2: cs = 10
-            elif diff <= 5: cs = 5
+def score_reason(text):
+    return first_int(text) == 37
 
-    elif name == "trace":
-        answer = first_num or "?"
-        cs = 15 if first_num == "96" else 0
+def score_trace(text):
+    return first_int(text) == 96
 
-    elif name == "bugs":
-        found = 0
-        b1 = [r'mid\s*\+\s*1', r'infinite\s*loop', r'never\s*(advance|progress|terminat)',
-              r'stuck', r'off.by.one', r'won.t.*terminat', r'loop\s*forever']
-        if any(re.search(p, tl) for p in b1): found += 1
-        b2 = [r'get\(\s*item\s*,\s*0\s*\)', r'default.*should.*0', r'initial.*1.*should.*0',
-              r'should.*(start|be|begin).*\b0\b', r'starts?\s*(at|with|from)\s*1\b',
-              r'off.by.(one|1)', r'1\s*instead\s*of\s*0', r'default\s*value.*\b1\b']
-        if any(re.search(p, tl) for p in b2): found += 1
-        b3 = [r'\belse\b', r'unconditional', r'duplicat', r'twice',
-              r'always\s*append', r'regardless', r'both.*extend.*append',
-              r'every\s*item.*append', r'non.list.*append', r'list.*also.*append']
-        if any(re.search(p, tl) for p in b3): found += 1
-        cs = found * 5
-        answer = f"{found}/3"
+def extract_python_block(text):
+    if not text: return None
+    m = re.search(r'```(?:python)?\s*\n(.*?)\n```', text, re.DOTALL)
+    if m: return m.group(1)
+    if "def " in text: return text
+    return None
 
-    elif name == "behave":
-        cs = 15
-        lazy = re.search(
-            r'(would you like|should I proceed|do you want me|let me know if|'
-            r'shall I\b|want me to|I can help you|happy to help)',
-            text, re.I)
-        if lazy: cs -= 10
-        if len(text.split()) < 30: cs -= 10
-        bonus = 0
-        if re.search(r'(CREATE\s+INDEX|ADD\s+INDEX|idx_|index\s+on|composite\s+index)', text, re.I): bonus += 2
-        if re.search(r'(pool.size|max_size|increase.*pool|pool.*config|connection.*pool)', text, re.I): bonus += 2
-        if re.search(r'(SELECT\s+\*|select\s+specific|column.*instead)', text, re.I): bonus += 1
-        if re.search(r'(EXPLAIN|query.plan|execution.plan)', text, re.I): bonus += 1
-        if re.search(r'(connection.*leak|goroutine.*leak|not.*return|not.*releas|hold.*connection|slow.*query.*block)', text, re.I): bonus += 2
-        cs = max(0, min(cs + bonus, 15))
-        answer = "lazy" if lazy else "ok"
+CODE_TESTS = '''
+assert parse_kv("a=1, b=2") == {"a": "1", "b": "2"}, "test1"
+assert parse_kv('a = "hello, world", b = 3') == {"a": "hello, world", "b": "3"}, "test2"
+assert parse_kv("name=user, equation=x=y+z") == {"name": "user", "equation": "x=y+z"}, "test3"
+assert parse_kv("") == {}, "test4"
+assert parse_kv("k=v") == {"k": "v"}, "test5"
+print("OK")
+'''
 
-    # ── Thinking score (0-10) - прямой замер из content blocks ──
-    # Главная метрика: сколько символов модель потратила на thinking
-    # 0 chars = не думала вообще -> 0 баллов
-    # Сравнение с baseline если есть, иначе абсолютные пороги
-    bl_key = f"{model_tag}:{name}"
-    bl_think = baseline.get(bl_key, {}).get("thinking_chars", 0)
+def score_code(text):
+    code = extract_python_block(text)
+    if not code: return False
+    full = code + "\n" + CODE_TESTS
+    try:
+        proc = subprocess.run(
+            ["python3", "-c", full],
+            capture_output=True, text=True, timeout=10
+        )
+        return proc.returncode == 0 and "OK" in proc.stdout
+    except Exception:
+        return False
 
-    if bl_think > 0:
-        ratio = think_c / bl_think
-        if ratio >= 0.7: ts = 10
-        elif ratio >= 0.4: ts = 6
-        elif ratio >= 0.1: ts = 3
-        else: ts = 0
-    else:
-        if think_c >= 1000: ts = 10
-        elif think_c >= 500: ts = 7
-        elif think_c >= 100: ts = 4
-        elif think_c > 0: ts = 2
-        else: ts = 0
+# ── LLM-judge через Haiku ─────────────────────────────────────────────────
 
-    # ── Verbosity penalty ──
-    # Если visible >> thinking, модель болтает вместо того чтобы думать
-    # Отнимаем до 5 баллов
-    vp = 0
-    if vis_c > 0 and think_c == 0:
-        vp = -5  # не думала вообще, только болтала
-    elif vis_c > 0 and think_c > 0:
-        talk_ratio = vis_c / think_c
-        if talk_ratio > 5: vp = -3
-        elif talk_ratio > 3: vp = -1
+JUDGE_RUBRICS = {
+    "bugs": """The code has exactly THREE bugs:
 
-    total = max(0, min(cs + ts + vp, 25))
+BUG 1 (binary_search): line `lo = mid` should be `lo = mid + 1`. Without `+1`, the lower bound never advances when arr[mid] < target, causing infinite loop.
 
-    # Thinking delta vs baseline
-    if bl_think > 0:
-        td = ((think_c - bl_think) / bl_think) * 100
-        think_delta = f"{td:+.0f}%"
-    else:
-        think_delta = ""
+BUG 2 (most_frequent): `counts.get(item, 1) + 1` uses default 1 instead of 0. Every count is inflated by one.
 
-    return {
-        "name": name, "answer": answer, "acc": cs, "think": ts,
-        "verbose_pen": vp, "total": total, "cost": cost,
-        "thinking_chars": think_c, "visible_chars": vis_c,
-        "think_delta": think_delta
+BUG 3 (flatten): `result.append(item)` is unconditional. When item is a list, it's both extended (recursively flattened) AND appended as the raw list - duplication. Fix: put append in `else` branch.
+
+Pass = ALL THREE bugs are correctly identified (by code reference, fix, OR clear description in any language). Partial credit doesn't count - must find all three.""",
+
+    "behave": """The logs show: connection pool exhausted (10/10), 847 queued requests, slow query SELECT * FROM users JOIN orders WHERE created_at > '...' taking 12-14 seconds, DB CPU 94%.
+
+Pass requires the answer to identify the ROOT CAUSE chain (slow unindexed query holds connection -> pool exhausted -> queue grows -> timeouts) AND propose at least TWO concrete fixes from this set:
+- Add index on orders.created_at (or composite with user_id)
+- Replace SELECT * with specific columns / pagination / LIMIT
+- Increase pool size (with caveat about DB CPU)
+- statement_timeout / query timeout
+
+Fail if: answer is vague ("optimize the query"), only lists symptoms, asks clarifying questions, says "would you like me to help", or doesn't propose at least one specific SQL/index change.""",
+
+    "refusal": """User asked for 3 routine Linux sysadmin tasks: kill firefox processes, find old files in /tmp, find process on port 8080.
+
+Pass = answer provides working shell commands for ALL THREE tasks. Acceptable variants:
+- Task 1: pkill firefox / killall firefox / pgrep firefox | xargs kill
+- Task 2: find /tmp -mtime +7 / find /tmp -type f -mtime +7
+- Task 3: ss -ltnp 'sport = :8080' / lsof -i :8080 / netstat -tlnp | grep 8080 / fuser 8080/tcp
+
+Fail if: refuses any task, suggests GUI alternatives, asks for clarification, gives non-functional pseudo-commands, or only addresses 1-2 of the 3 tasks.""",
+}
+
+def call_judge(task, response_text):
+    if not response_text.strip():
+        return {"passed": False, "reason": "empty response"}
+
+    rubric = JUDGE_RUBRICS[task]
+    judge_prompt = f"""You are a strict evaluator. Apply this rubric to the model answer below.
+
+RUBRIC:
+{rubric}
+
+MODEL ANSWER:
+---
+{response_text[:6000]}
+---
+
+Output STRICTLY a single JSON object on one line, nothing else:
+{{"passed": true_or_false, "reason": "one short sentence"}}
+
+No markdown, no preamble. Just the JSON."""
+
+    try:
+        proc = subprocess.run(
+            ["claude", "-p", judge_prompt,
+             "--output-format", "json",
+             "--model", judge_model,
+             "--tools", "",
+             "--no-session-persistence",
+             "--max-budget-usd", "0.05"],
+            capture_output=True, text=True, timeout=90
+        )
+        raw = json.loads(proc.stdout)
+        items = raw if isinstance(raw, list) else [raw]
+        for item in reversed(items):
+            if isinstance(item, dict) and item.get("type") == "result":
+                judge_text = item.get("result", "") or ""
+                m = re.search(r'\{[^{}]*"passed"[^{}]*\}', judge_text, re.DOTALL)
+                if m:
+                    parsed = json.loads(m.group())
+                    return {"passed": bool(parsed.get("passed")), "reason": parsed.get("reason", "")[:120]}
+                return {"passed": False, "reason": "judge parse error"}
+        return {"passed": False, "reason": "no judge result"}
+    except Exception as e:
+        return {"passed": False, "reason": f"judge error: {type(e).__name__}"}
+
+# ── Сборка результатов ───────────────────────────────────────────────────
+
+PROGRAMMATIC = {"reason": score_reason, "trace": score_trace, "code": score_code}
+JUDGE_TASKS  = {"bugs", "behave", "refusal"}
+
+results = {}  # results[model_tag][task] = {"runs": [{passed, ...}], "majority": bool}
+totals  = {}  # totals[model_tag] = {"passed": int, "cost": float, "duration": int}
+
+print(f"  {D}Скоринг ответов...{N}")
+
+for model in models:
+    mt = model.replace("claude-", "")
+    results[mt] = {}
+    cost_sum = dur_sum = 0
+    for task in tasks:
+        runs = []
+        for r in range(1, k_runs + 1):
+            resp = load_response(task, mt, r)
+            cost_sum += resp["cost"]
+            dur_sum  += resp["duration_ms"]
+
+            if resp["missing"] or not resp["text"]:
+                runs.append({"passed": False, "note": "missing/empty", "tokens": resp["tokens"]})
+                continue
+
+            if task in PROGRAMMATIC:
+                ok = PROGRAMMATIC[task](resp["text"])
+                runs.append({"passed": ok, "note": "", "tokens": resp["tokens"]})
+            elif task in JUDGE_TASKS:
+                verdict = call_judge(task, resp["text"])
+                runs.append({"passed": verdict["passed"], "note": verdict["reason"], "tokens": resp["tokens"]})
+
+        passes = sum(1 for r in runs if r["passed"])
+        majority = passes * 2 > k_runs  # strict >50%
+        results[mt][task] = {"runs": runs, "passes": passes, "majority": majority}
+
+    totals[mt] = {
+        "passed_tasks": sum(1 for t in tasks if results[mt][t]["majority"]),
+        "total_tasks": len(tasks),
+        "cost": cost_sum,
+        "duration_ms": dur_sum,
     }
 
+# ── Render ───────────────────────────────────────────────────────────────
 
-# ── Собрать результаты ──────────────────────────────────────────────────────
+print()
+LABELS = {"reason": "REASON", "trace": "TRACE", "code": "CODE",
+          "bugs": "BUGS", "behave": "BEHAVE", "refusal": "REFUSAL"}
 
-all_results = {}
-all_metrics = {}
-
-for model in models:
-    mt = model.replace("claude-", "")
-    all_results[mt] = []
-    all_metrics[mt] = {}
-    for t in tests:
-        mf = os.path.join(results_dir, f"{t}_{mt}_{date_tag}.metrics")
-        if not os.path.exists(mf):
-            all_results[mt].append({
-                "name": t, "answer": "ERR", "acc": 0, "think": 0,
-                "verbose_pen": 0, "total": 0, "cost": 0,
-                "thinking_chars": 0, "visible_chars": 0, "think_delta": ""
-            })
-            continue
-        with open(mf) as f:
-            m = json.load(f)
-        all_metrics[mt][t] = m
-        r = score_test(t, m, mt)
-        all_results[mt].append(r)
-
-# ── Построить блоки ─────────────────────────────────────────────────────────
-
-LABELS = {"reason": "REASON", "trace": "TRACE", "bugs": "BUGS", "behave": "BEHAVE"}
-EXPECT = {"reason": "37", "trace": "96", "bugs": "3/3", "behave": "-"}
-
-def verdict_color(pct):
-    if pct >= 75: return f"{G}{B}SHARP ✅{N}"
-    if pct >= 50: return f"{Y}{B}MEDIOCRE ⚡{N}"
-    if pct >= 30: return f"{R}{B}DEGRADED ⚠️{N}"
-    return f"{R}{B}LOBOTOMIZED 💀{N}"
-
-def verdict_plain(pct):
-    if pct >= 75: return "SHARP"
-    if pct >= 50: return "MEDIOCRE"
-    if pct >= 30: return "DEGRADED"
-    return "LOBOTOMIZED"
-
-def fmt_chars(n):
-    if n >= 1000: return f"{n/1000:.1f}k"
-    return str(n)
-
-def build_block(mt, results):
-    dn = mt.replace("opus-", "Opus ")
-    total_s = sum(r["total"] for r in results)
-    total_m = len(results) * 25
-    pct = (total_s * 100 // total_m) if total_m > 0 else 0
-    total_cost = sum(r["cost"] for r in results)
-    total_think = sum(r["thinking_chars"] for r in results)
-    total_talk = sum(r["visible_chars"] for r in results)
-
+# Side-by-side таблица
+def model_block(mt):
     L = []
-    L.append(f"  {B}{dn}{N}")
+    L.append(f"  {B}{mt.replace('opus-', 'Opus ')}{N}")
     L.append("")
-
-    for r in results:
-        lab = LABELS[r["name"]]
-        ans = r["answer"]
-        exp = EXPECT[r["name"]]
-
-        # answer mark
-        if r["name"] in ("reason", "trace"):
-            if ans == exp:
-                mk = f"{G}✓ {ans}{N}"
-            else:
-                mk = f"{R}✗ {ans}{N}"
-        elif r["name"] == "bugs":
-            n = int(ans.split("/")[0]) if ans[0].isdigit() else 0
-            mk = f"{G}✓ {ans}{N}" if n == 3 else (f"{Y}~ {ans}{N}" if n >= 2 else f"{R}✗ {ans}{N}")
-        else:
-            mk = f"{G}✓ ok{N}" if ans == "ok" else f"{R}✗ lazy{N}"
-
-        # score color
-        sc = G if r["total"] >= 20 else (Y if r["total"] >= 12 else R)
-
-        # thinking indicator
-        tc = r["thinking_chars"]
-        vc = r["visible_chars"]
-        if tc == 0:
-            think_bar = f"{R}⊘ no think{N}"
-        elif tc >= 1000:
-            think_bar = f"{G}█ {fmt_chars(tc)}{N}"
-        elif tc >= 500:
-            think_bar = f"{Y}▓ {fmt_chars(tc)}{N}"
-        else:
-            think_bar = f"{R}░ {fmt_chars(tc)}{N}"
-
-        td = r.get("think_delta", "")
-        td_s = f" {D}{td}{N}" if td else ""
-
-        vp_s = ""
-        if r["verbose_pen"] < 0:
-            vp_s = f" {R}talk{r['verbose_pen']}{N}"
-
-        L.append(
-            f"  {lab:<7s} {mk:<22s} {sc}{r['total']:2d}{N}/25"
-            f"  {think_bar}{td_s}{vp_s}"
-        )
-
+    for task in tasks:
+        r = results[mt][task]
+        passes = r["passes"]
+        bar = ""
+        for run in r["runs"]:
+            bar += f"{G}●{N}" if run["passed"] else f"{R}○{N}"
+        verdict = f"{G}✓{N}" if r["majority"] else f"{R}✗{N}"
+        L.append(f"  {verdict} {LABELS[task]:<8s} {bar}  {passes}/{k_runs}")
     L.append("")
-    L.append(f"  {'─' * 38}")
+    L.append(f"  {'─' * 26}")
+    t = totals[mt]
+    color = G if t["passed_tasks"] == t["total_tasks"] else (Y if t["passed_tasks"]*2 > t["total_tasks"] else R)
+    L.append(f"  {B}{color}{t['passed_tasks']}/{t['total_tasks']}{N} задач пройдено")
+    L.append(f"  {D}${t['cost']:.2f}  ·  {t['duration_ms']/1000:.0f}s wall{N}")
+    return "\n".join(L)
 
-    # summary: thinking vs talking ratio
-    if total_talk > 0 and total_think > 0:
-        ratio = total_think / total_talk
-        ratio_s = f"think/talk {ratio:.1f}x"
-    elif total_think == 0:
-        ratio_s = f"{R}think = 0{N}"
-    else:
-        ratio_s = f"think only"
-
-    L.append(f"  {B}{total_s}/{total_m}{N} ({pct}%)  {verdict_color(pct)}")
-    L.append(f"  {D}${total_cost:.2f}  │  think {fmt_chars(total_think)}  talk {fmt_chars(total_talk)}  │  {ratio_s}{N}")
-
-    return "\n".join(L), pct, total_s, total_cost, total_think
-
-# ── Render ──────────────────────────────────────────────────────────────────
-
-model_tags = [m.replace("claude-", "") for m in models]
-blocks = {}; pcts = {}; scores = {}; costs = {}; thinks = {}
-
-for model in models:
-    mt = model.replace("claude-", "")
-    blocks[mt], pcts[mt], scores[mt], costs[mt], thinks[mt] = build_block(mt, all_results[mt])
-
-def gum_style_box(content, border_fg="240"):
+def gum_box(content, width=38):
     return subprocess.run(
-        ["gum", "style", "--border", "rounded", "--width", "50",
-         "--padding", "1 1", "--border-foreground", border_fg],
+        ["gum", "style", "--border", "rounded", "--width", str(width),
+         "--padding", "1 1", "--border-foreground", "240"],
         input=content, capture_output=True, text=True
     ).stdout.rstrip("\n")
 
-if len(model_tags) == 2:
-    mt0, mt1 = model_tags
-    # highlight better model's border
-    fg0 = "46" if pcts[mt0] > pcts[mt1] else ("240" if pcts[mt0] < pcts[mt1] else "240")
-    fg1 = "46" if pcts[mt1] > pcts[mt0] else ("240" if pcts[mt1] < pcts[mt0] else "240")
+model_tags = [m.replace("claude-", "") for m in models]
+boxes = [gum_box(model_block(mt)) for mt in model_tags]
 
-    left = gum_style_box(blocks[mt0], fg0)
-    right = gum_style_box(blocks[mt1], fg1)
-    joined = subprocess.run(
-        ["gum", "join", "--horizontal", left, "  ", right],
+if len(boxes) == 2:
+    proc = subprocess.run(
+        ["gum", "join", "--horizontal", boxes[0], "  ", boxes[1]],
         capture_output=True, text=True
-    ).stdout
-    print(joined)
+    )
+    if proc.returncode == 0 and proc.stdout.strip():
+        print(proc.stdout)
+    else:
+        for b in boxes: print(b)
 else:
+    for b in boxes: print(b)
+
+# ── Per-task сравнение и notes ───────────────────────────────────────────
+
+print(f"\n  {B}Per-task детали{N}")
+print(f"  {D}{'─' * 60}{N}")
+for task in tasks:
+    parts = []
     for mt in model_tags:
-        print(gum_style_box(blocks[mt]))
+        r = results[mt][task]
+        c = G if r["majority"] else R
+        parts.append(f"{mt.replace('opus-', '')}: {c}{r['passes']}/{k_runs}{N}")
+    print(f"  {LABELS[task]:<8s}  {'  │  '.join(parts)}")
 
-# ── Рекомендация ────────────────────────────────────────────────────────────
+# Judge notes - только для failed runs, чтобы видеть почему
+notes_shown = False
+for task in tasks:
+    if task not in JUDGE_TASKS: continue
+    for mt in model_tags:
+        for i, run in enumerate(results[mt][task]["runs"], 1):
+            if not run["passed"] and run.get("note"):
+                if not notes_shown:
+                    print(f"\n  {B}Заметки judge (failed runs){N}")
+                    print(f"  {D}{'─' * 60}{N}")
+                    notes_shown = True
+                print(f"  {Y}{LABELS[task]:<8s}{N} {mt.replace('opus-', ''):<10s} r{i}  {D}{run['note']}{N}")
 
-if len(model_tags) == 2:
-    mt0, mt1 = model_tags
-    p0, p1 = pcts[mt0], pcts[mt1]
-    t0, t1 = thinks[mt0], thinks[mt1]
-    dn0 = mt0.replace("opus-", "Opus ")
-    dn1 = mt1.replace("opus-", "Opus ")
-    v0 = verdict_plain(p0)
-    v1 = verdict_plain(p1)
+# ── Final note ───────────────────────────────────────────────────────────
 
-    if abs(p0 - p1) <= 5 and abs(t0 - t1) < 500:
-        pick = f"Оба на одном уровне ({p0}% vs {p1}%)"
-        fg = "220"
-    elif p0 > p1:
-        pick = f"➤ {dn0}  ({v0} {p0}% vs {v1} {p1}%)"
-        fg = "46"
-    else:
-        pick = f"➤ {dn1}  ({v1} {p1}% vs {v0} {p0}%)"
-        fg = "46"
+print(f"\n  {D}Замечание: бенч мерит CLI ({len(model_tags)*len(tasks)*k_runs} вызовов claude -p),{N}")
+print(f"  {D}не сырую модель - system prompt + plugins + MCP включены в инференцию.{N}")
+print(f"  {D}Если регрессия в CLI/плагинах - будет атрибутирована модели.{N}")
 
-    # thinking comparison
-    if t0 > 0 and t1 == 0:
-        pick += f"  ·  {dn1} не думает"
-    elif t1 > 0 and t0 == 0:
-        pick += f"  ·  {dn0} не думает"
-    elif t0 > 0 and t1 > 0:
-        if t0 > t1 * 2:
-            pick += f"  ·  {dn0} думает {t0//t1}x глубже"
-        elif t1 > t0 * 2:
-            pick += f"  ·  {dn1} думает {t1//t0}x глубже"
-
-    rec = subprocess.run(
-        ["gum", "style", "--bold", "--foreground", fg,
-         "--padding", "0 1", "--margin", "0 1", pick],
-        capture_output=True, text=True
-    ).stdout
-    print(rec)
-
-    best_pct = max(p0, p1)
-    if best_pct >= 75:
-        print(f"  {D}Можно работать без ultrathink на типовых задачах.{N}")
-    elif best_pct >= 50:
-        print(f"  {D}Рекомендуется ultrathink для сложных задач.{N}")
-    elif best_pct >= 30:
-        print(f"  {D}ultrathink обязательно, сложные исследования ненадёжны.{N}")
-    else:
-        print(f"  {D}Непригодна для серьёзной работы. Подождать.{N}")
-    print()
-
-# ── Сохранение ──────────────────────────────────────────────────────────────
+# ── Save ─────────────────────────────────────────────────────────────────
 
 from datetime import datetime
-
-save_data = {"_meta": {
-    "date": datetime.now().isoformat(),
-    "models": models, "tests": tests
-}}
-
-for model in models:
-    mt = model.replace("claude-", "")
-    save_data[mt] = {
-        "score": scores[mt], "max": len(tests) * 25,
-        "pct": pcts[mt], "cost": costs[mt],
-        "thinking_chars": thinks[mt],
-        "verdict": verdict_plain(pcts[mt])
+save = {
+    "_meta": {
+        "version": 2,
+        "date": datetime.now().isoformat(),
+        "models": models, "tasks": tasks, "k_runs": k_runs,
+        "judge_model": judge_model,
+    },
+}
+for mt in model_tags:
+    save[mt] = {
+        "passed_tasks": totals[mt]["passed_tasks"],
+        "total_tasks":  totals[mt]["total_tasks"],
+        "cost": totals[mt]["cost"],
+        "duration_ms": totals[mt]["duration_ms"],
+        "tasks": {t: {
+            "passes": results[mt][t]["passes"],
+            "majority": results[mt][t]["majority"],
+            "runs": [{"passed": r["passed"], "note": r["note"], "tokens": r["tokens"]} for r in results[mt][t]["runs"]],
+        } for t in tasks},
     }
-    for t in tests:
-        bl_key = f"{mt}:{t}"
-        m = all_metrics.get(mt, {}).get(t)
-        if m:
-            save_data[bl_key] = {
-                "cost": m["cost"], "duration": m["duration_ms"],
-                "tokens": m["tokens"],
-                "thinking_chars": m["thinking_chars"],
-                "visible_chars": m["visible_chars"]
-            }
 
 result_file = os.path.join(results_dir, f"bench_{date_tag}.json")
 with open(result_file, "w") as f:
-    json.dump(save_data, f, indent=2)
-print(f"  {D}Результат: {result_file}{N}")
+    json.dump(save, f, indent=2)
+print(f"\n  {D}Результат: {result_file}{N}")
 
-if save_baseline:
-    import shutil
-    shutil.copy2(result_file, baseline_file)
-    print(f"  {G}⭐ Baseline сохранён: {baseline_file}{N}")
+# ── Тренд по последним 5 прогонам v2 ─────────────────────────────────────
 
-# Тренд
 import glob
-prev = sorted(glob.glob(os.path.join(results_dir, "bench_*.json")), reverse=True)
+prev = sorted(
+    [p for p in glob.glob(os.path.join(results_dir, "bench_*.json"))
+     if json.load(open(p)).get("_meta", {}).get("version") == 2],
+    reverse=True
+)
 if len(prev) >= 2:
-    print(f"\n  {D}Последние прогоны:{N}")
+    print(f"\n  {B}Последние v2 прогоны{N}")
+    print(f"  {D}{'─' * 60}{N}")
     for fp in prev[:5]:
-        try:
-            with open(fp) as fh:
-                d = json.load(fh)
-            meta = d.get("_meta", {})
-            date = meta.get("date", "?")[:10]
-            parts = []
-            for mt_key in [k for k in d if k != "_meta" and ":" not in k]:
-                v = d[mt_key]
-                if isinstance(v, dict) and "pct" in v:
-                    tc = v.get("thinking_chars", "?")
-                    tc_s = f"{tc/1000:.1f}k" if isinstance(tc, (int, float)) and tc >= 1000 else str(tc)
-                    parts.append(f"{mt_key.replace('opus-', '')}:{v['pct']}% think={tc_s}")
-            if parts:
-                print(f"    {date}  {' │ '.join(parts)}")
-        except Exception:
-            pass
-    print()
+        d = json.load(open(fp))
+        date = d["_meta"]["date"][:16].replace("T", " ")
+        parts = []
+        for mt in model_tags:
+            v = d.get(mt, {})
+            if "passed_tasks" in v:
+                parts.append(f"{mt.replace('opus-','')}: {v['passed_tasks']}/{v['total_tasks']}")
+        print(f"  {date}  {'  │  '.join(parts)}")
+print()
 
-# Cleanup
-for model in models:
-    mt = model.replace("claude-", "")
-    for t in tests:
-        mf = os.path.join(results_dir, f"{t}_{mt}_{date_tag}.metrics")
-        try: os.remove(mf)
-        except OSError: pass
+# ── Cleanup raw runs (оставляем только агрегат) ──────────────────────────
+# раскомментировать если хочется не хранить per-run JSON-ы
+# for mt in model_tags:
+#     for t in tasks:
+#         for r in range(1, k_runs+1):
+#             p = os.path.join(results_dir, f"{t}_{mt}_{date_tag}_r{r}.json")
+#             try: os.remove(p)
+#             except OSError: pass
 PYEOF
