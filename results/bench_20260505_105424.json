@@ -1,0 +1,188 @@
+{
+  "_meta": {
+    "version": 3,
+    "date": "2026-05-05T10:56:03.881031",
+    "models": [
+      "claude-opus-4-6",
+      "claude-opus-4-7"
+    ],
+    "tasks": [
+      "reason",
+      "trace",
+      "code"
+    ],
+    "k_runs": 1,
+    "judge_model": "claude-sonnet-4-6",
+    "verdict": "USE: claude-opus-4-7\n- opus-4-7 has zero defects across all tasks; opus-4-6 scores noise=4 and shallow=1 on the code task \u2014 it's producing garbage on the task that matters most for engineering work.\n- opus-4-7 is 23% faster (18919ms vs 24561ms) at comparable correctness and depth, meaning the same quality at lower latency and slightly lower cost.\n- On the code task specifically, opus-4-7 invests more thinking (1789 vs 1267 tokens) yet outputs cleaner results \u2014 better thinking discipline, not just more tokens."
+  },
+  "per_model": {
+    "opus-4-6": {
+      "mean_thinking_tokens": 1279.857142857143,
+      "mean_duration_ms": 24561.333333333332,
+      "mean_blocks": 1,
+      "mean_depth": 6.666666666666667,
+      "mean_correctness": 10,
+      "defect_means": {
+        "servile": 0,
+        "overconfident": 0,
+        "lazy": 0,
+        "noise": 1.3333333333333333,
+        "hedging": 0,
+        "drift": 0,
+        "shallow": 0.3333333333333333,
+        "hallucination": 0
+      },
+      "total_cost": 0.1291235,
+      "shadow_pass_rate": 1.0
+    },
+    "opus-4-7": {
+      "mean_thinking_tokens": 1203.8095238095239,
+      "mean_duration_ms": 18918.666666666668,
+      "mean_blocks": 1,
+      "mean_depth": 6,
+      "mean_correctness": 10,
+      "defect_means": {
+        "servile": 0,
+        "overconfident": 0,
+        "lazy": 0,
+        "noise": 0,
+        "hedging": 0,
+        "drift": 0,
+        "shallow": 0,
+        "hallucination": 0
+      },
+      "total_cost": 0.12830950000000002,
+      "shadow_pass_rate": 1.0
+    }
+  },
+  "per_task": {
+    "opus-4-6": {
+      "reason": {
+        "thinking_tokens": 1755.5714285714287,
+        "duration_ms": 26299,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 10,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.0553495,
+        "evidence_samples": []
+      },
+      "trace": {
+        "thinking_tokens": 817.1428571428571,
+        "duration_ms": 17780,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 9,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.030049000000000003,
+        "evidence_samples": []
+      },
+      "code": {
+        "thinking_tokens": 1266.857142857143,
+        "duration_ms": 29605,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 1,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 4,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 1,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.04372499999999999,
+        "evidence_samples": [
+          {
+            "noise": "\u0422\u0430\u043a \u0442\u043e\u0447\u043d\u043e, \u0441\u044d\u0440."
+          }
+        ]
+      }
+    },
+    "opus-4-7": {
+      "reason": {
+        "thinking_tokens": 1480.4285714285713,
+        "duration_ms": 27668,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 9,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.0499325,
+        "evidence_samples": []
+      },
+      "trace": {
+        "thinking_tokens": 341.85714285714283,
+        "duration_ms": 7791,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 9,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.018503500000000003,
+        "evidence_samples": []
+      },
+      "code": {
+        "thinking_tokens": 1789.142857142857,
+        "duration_ms": 21297,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.05987350000000001,
+        "evidence_samples": []
+      }
+    }
+  }
+}

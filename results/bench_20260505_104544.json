@@ -1,0 +1,184 @@
+{
+  "_meta": {
+    "version": 3,
+    "date": "2026-05-05T10:47:47.229234",
+    "models": [
+      "claude-opus-4-6",
+      "claude-opus-4-7"
+    ],
+    "tasks": [
+      "reason",
+      "trace",
+      "code"
+    ],
+    "k_runs": 1,
+    "judge_model": "claude-sonnet-4-6",
+    "verdict": "Both models hit correctness=10 and shadow_pass_rate=1.0 on all three task types \u2014 no functional regression. The divergence is in depth and thinking allocation.\n\n**Depth gap.** 4-6 averages depth 7.33 vs 4-7's 5.67. The entire gap comes from the `code` task: 4-6 scores depth=2, 4-7 scores depth=0. Both pass all programmatic checks. A model that burns 2712 thinking tokens (2.9\u00d7 more than 4-6's 937) and takes 32 seconds to produce a depth=0 answer is doing *something* in that thinking budget \u2014 but the output structure reads as thin to the judge. That's a contradictory signal worth watching.\n\n**Shallow defect inversion.** 4-6 carries shallow=1 on `code`, 4-7 has shallow=0 everywhere. Yet 4-7's depth on `code` is zero. These two scores point in opposite directions; either the shallow rubric and the depth rubric are capturing different failure modes, or one scoring axis is misfiring on this task.\n\n**Thinking allocation.** On `reason`, 4-6 uses 1714 tokens vs 4-7's 1056; on `trace`, 747 vs 292. 4-7 consistently underinvests on reasoning tasks relative to 4-6, yet achieves similar or equal scores \u2014 which could mean efficiency or could mean the tasks aren't hard enough to expose the gap at k=1.\n\n**Speed vs cost.** 4-7 is faster overall (18.2s vs 21.6s mean) but more expensive ($0.138 vs $0.118), driven by the `code` outlier. No defect surge anywhere \u2014 all eight defect axes are zero for 4-7, 0.33 shallow mean for 4-6.\n\nThe depth=0 / correctness=10 combination on `code` for 4-7 is the single most anomalous data point in this run and should be reproduced at k>1 before drawing firm conclusions.\n\n`4-6 - WORKING: clean correctness and shadow across all tasks, minor shallow flag on code is the only non-zero defect`  \n`4-7 - RISKY: depth collapsed to 0 on code despite 2.9\u00d7 thinking spend, aggregate depth 5.67 vs 4-6's 7.33, contradicting the zero shallow defect reading`"
+  },
+  "per_model": {
+    "opus-4-6": {
+      "mean_thinking_tokens": 1132.8095238095239,
+      "mean_duration_ms": 21572,
+      "mean_blocks": 1,
+      "mean_depth": 7.333333333333333,
+      "mean_correctness": 10,
+      "defect_means": {
+        "servile": 0,
+        "overconfident": 0,
+        "lazy": 0,
+        "noise": 0,
+        "hedging": 0,
+        "drift": 0,
+        "shallow": 0.3333333333333333,
+        "hallucination": 0
+      },
+      "total_cost": 0.11753350000000001,
+      "shadow_pass_rate": 1.0
+    },
+    "opus-4-7": {
+      "mean_thinking_tokens": 1353.3809523809525,
+      "mean_duration_ms": 18239.666666666668,
+      "mean_blocks": 1,
+      "mean_depth": 5.666666666666667,
+      "mean_correctness": 10,
+      "defect_means": {
+        "servile": 0,
+        "overconfident": 0,
+        "lazy": 0,
+        "noise": 0,
+        "hedging": 0,
+        "drift": 0,
+        "shallow": 0,
+        "hallucination": 0
+      },
+      "total_cost": 0.13771450000000002,
+      "shadow_pass_rate": 1.0
+    }
+  },
+  "per_task": {
+    "opus-4-6": {
+      "reason": {
+        "thinking_tokens": 1714.142857142857,
+        "duration_ms": 32329,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 10,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.05404950000000001,
+        "evidence_samples": []
+      },
+      "trace": {
+        "thinking_tokens": 747.1428571428571,
+        "duration_ms": 14732,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 10,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.028114,
+        "evidence_samples": []
+      },
+      "code": {
+        "thinking_tokens": 937.1428571428571,
+        "duration_ms": 17655,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 2,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 1,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.03537,
+        "evidence_samples": []
+      }
+    },
+    "opus-4-7": {
+      "reason": {
+        "thinking_tokens": 1055.7142857142858,
+        "duration_ms": 14049,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 9,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.038252499999999995,
+        "evidence_samples": []
+      },
+      "trace": {
+        "thinking_tokens": 292.2857142857143,
+        "duration_ms": 8433,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 8,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.0174135,
+        "evidence_samples": []
+      },
+      "code": {
+        "thinking_tokens": 2712.1428571428573,
+        "duration_ms": 32237,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.08204850000000001,
+        "evidence_samples": []
+      }
+    }
+  }
+}

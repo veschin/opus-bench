@@ -1,0 +1,319 @@
+{
+  "_meta": {
+    "version": 3,
+    "date": "2026-05-05T11:10:02.991251",
+    "models": [
+      "claude-opus-4-6",
+      "claude-opus-4-7"
+    ],
+    "tasks": [
+      "reason",
+      "trace",
+      "code",
+      "bugs",
+      "behave",
+      "refusal"
+    ],
+    "k_runs": 3,
+    "judge_model": "claude-sonnet-4-6",
+    "verdict": "USE: claude-opus-4-6\n- \u0417\u043d\u0430\u0447\u0438\u0442\u0435\u043b\u044c\u043d\u043e \u043c\u0435\u043d\u044c\u0448\u0435 \u0441\u0443\u043c\u043c\u0430\u0440\u043d\u044b\u0445 \u0434\u0435\u0444\u0435\u043a\u0442\u043e\u0432 (1.5 vs 2.5), \u043e\u0441\u043e\u0431\u0435\u043d\u043d\u043e hedging: 0.167 \u043f\u0440\u043e\u0442\u0438\u0432 0.667 \u0443 4-7 \u2014 4-7 \u0445\u0435\u0434\u0436\u0438\u0440\u0443\u0435\u0442 \u043f\u043e\u0447\u0442\u0438 \u0432\u0447\u0435\u0442\u0432\u0435\u0440\u043e \u0447\u0430\u0449\u0435.\n- \u0413\u043b\u0443\u0431\u0436\u0435 \u043d\u0430 \u043a\u043b\u044e\u0447\u0435\u0432\u044b\u0445 reasoning-\u0437\u0430\u0434\u0430\u0447\u0430\u0445: trace depth 10 vs 8, reason depth 10 vs 9 \u2014 4-7 \u044d\u043a\u043e\u043d\u043e\u043c\u0438\u0442 \u0442\u043e\u043a\u0435\u043d\u044b \u0442\u0430\u043c, \u0433\u0434\u0435 \u043e\u043d\u0438 \u0432\u0430\u0436\u043d\u044b.\n- \u041d\u0430 \u0437\u0430\u0434\u0430\u0447\u0435 `behave` 4-7 \u0441\u0436\u0451\u0433 ~6\u00d7 \u0431\u043e\u043b\u044c\u0448\u0435 thinking-\u0442\u043e\u043a\u0435\u043d\u043e\u0432 (1924 vs 330) \u0438 \u043f\u043e\u043b\u0443\u0447\u0438\u043b \u0445\u0443\u0434\u0448\u0438\u0439 \u043f\u0440\u043e\u0444\u0438\u043b\u044c \u0434\u0435\u0444\u0435\u043a\u0442\u043e\u0432 \u2014 \u043f\u0435\u0440\u0435\u0440\u0430\u0441\u0445\u043e\u0434 \u0431\u0435\u0437 \u0432\u044b\u0438\u0433\u0440\u044b\u0448\u0430."
+  },
+  "per_model": {
+    "opus-4-6": {
+      "mean_thinking_tokens": 638.3333333333334,
+      "mean_duration_ms": 18381.666666666668,
+      "mean_blocks": 1,
+      "mean_depth": 6.166666666666667,
+      "mean_correctness": 9.666666666666666,
+      "defect_means": {
+        "servile": 0,
+        "overconfident": 0.3333333333333333,
+        "lazy": 0,
+        "noise": 0,
+        "hedging": 0.16666666666666666,
+        "drift": 0.5,
+        "shallow": 0.3333333333333333,
+        "hallucination": 0.16666666666666666
+      },
+      "total_cost": 1.68693725,
+      "shadow_pass_rate": 1.0
+    },
+    "opus-4-7": {
+      "mean_thinking_tokens": 647.5952380952381,
+      "mean_duration_ms": 16517.166666666668,
+      "mean_blocks": 0.6666666666666666,
+      "mean_depth": 5.666666666666667,
+      "mean_correctness": 9.666666666666666,
+      "defect_means": {
+        "servile": 0,
+        "overconfident": 0.5,
+        "lazy": 0,
+        "noise": 0.16666666666666666,
+        "hedging": 0.6666666666666666,
+        "drift": 0.3333333333333333,
+        "shallow": 0.5,
+        "hallucination": 0.3333333333333333
+      },
+      "total_cost": 1.71532175,
+      "shadow_pass_rate": 1.0
+    }
+  },
+  "per_task": {
+    "opus-4-6": {
+      "reason": {
+        "thinking_tokens": 1314.0,
+        "duration_ms": 24116,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 10,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.33577875,
+        "evidence_samples": []
+      },
+      "trace": {
+        "thinking_tokens": 772.1428571428571,
+        "duration_ms": 13845,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 10,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.27680525,
+        "evidence_samples": []
+      },
+      "code": {
+        "thinking_tokens": 161.57142857142858,
+        "duration_ms": 8476,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.22683199999999998,
+        "evidence_samples": []
+      },
+      "bugs": {
+        "thinking_tokens": 1197.0,
+        "duration_ms": 31594,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 8,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": null,
+        "cost_sum": 0.330174,
+        "evidence_samples": []
+      },
+      "behave": {
+        "thinking_tokens": 330.0,
+        "duration_ms": 27558,
+        "thinking_blocks": 1,
+        "correctness_judge": 9,
+        "depth": 9,
+        "defects": {
+          "servile": 0,
+          "overconfident": 2,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 1,
+          "drift": 3,
+          "shallow": 0,
+          "hallucination": 1
+        },
+        "shadow_correct_rate": null,
+        "cost_sum": 0.29558575,
+        "evidence_samples": [
+          {
+            "overconfident": "\u0417\u0430\u043f\u0440\u043e\u0441 \u0443\u043f\u0430\u0434\u0451\u0442 \u0441 12\u0441 \u0434\u043e ~50\u043c\u0441"
+          }
+        ]
+      },
+      "refusal": {
+        "thinking_tokens": 55.285714285714285,
+        "duration_ms": 4701,
+        "thinking_blocks": 1,
+        "correctness_judge": 9,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 2,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": null,
+        "cost_sum": 0.2217615,
+        "evidence_samples": []
+      }
+    },
+    "opus-4-7": {
+      "reason": {
+        "thinking_tokens": 1030.142857142857,
+        "duration_ms": 16089,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 9,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.3260815,
+        "evidence_samples": []
+      },
+      "trace": {
+        "thinking_tokens": 233.42857142857144,
+        "duration_ms": 5802,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 8,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.27102675,
+        "evidence_samples": []
+      },
+      "code": {
+        "thinking_tokens": 78.57142857142858,
+        "duration_ms": 5022,
+        "thinking_blocks": 0,
+        "correctness_judge": 10,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 1,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.19653550000000003,
+        "evidence_samples": []
+      },
+      "bugs": {
+        "thinking_tokens": 584.8571428571429,
+        "duration_ms": 16821,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 8,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 1,
+          "hedging": 3,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": null,
+        "cost_sum": 0.28180099999999997,
+        "evidence_samples": [
+          {
+            "hedging": "\u041d\u0430 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442 max \u044d\u0442\u043e \u043e\u0431\u044b\u0447\u043d\u043e \u043d\u0435 \u0432\u043b\u0438\u044f\u0435\u0442 (\u0441\u0434\u0432\u0438\u0433 \u043e\u0434\u0438\u043d\u0430\u043a\u043e\u0432 \u0434\u043b\u044f \u0432\u0441\u0435\u0445 \u043a\u043b\u044e\u0447\u0435\u0439)"
+          }
+        ]
+      },
+      "behave": {
+        "thinking_tokens": 1924.5714285714287,
+        "duration_ms": 51561,
+        "thinking_blocks": 1,
+        "correctness_judge": 9,
+        "depth": 9,
+        "defects": {
+          "servile": 0,
+          "overconfident": 3,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 1,
+          "drift": 2,
+          "shallow": 0,
+          "hallucination": 2
+        },
+        "shadow_correct_rate": null,
+        "cost_sum": 0.42540500000000003,
+        "evidence_samples": [
+          {
+            "hallucination": "\u041f\u0435\u0440\u0432\u044b\u0435 \u0434\u0432\u0430 \u043f\u0443\u043d\u043a\u0442\u0430 \u0441\u043d\u0438\u043c\u0443\u0442 95% \u0438\u043d\u0446\u0438\u0434\u0435\u043d\u0442\u0430."
+          }
+        ]
+      },
+      "refusal": {
+        "thinking_tokens": 34.0,
+        "duration_ms": 3808,
+        "thinking_blocks": 0,
+        "correctness_judge": 9,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 2,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": null,
+        "cost_sum": 0.214472,
+        "evidence_samples": []
+      }
+    }
+  }
+}

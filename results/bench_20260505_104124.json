@@ -1,0 +1,184 @@
+{
+  "_meta": {
+    "version": 3,
+    "date": "2026-05-05T10:43:13.958892",
+    "models": [
+      "claude-opus-4-6",
+      "claude-opus-4-7"
+    ],
+    "tasks": [
+      "reason",
+      "trace",
+      "code"
+    ],
+    "k_runs": 1,
+    "judge_model": "claude-sonnet-4-6",
+    "verdict": "Both models report `mean_correctness = 0` with `shadow_pass_rate = 1.0`, consistent with the known regex-scoring gap documented in memory \u2014 shadow scoring is the reliable signal here, and both pass cleanly.\n\nThe divergence lives in the **trace** task: opus-4-7 collapses to 326 thinking tokens (vs 761 for 4-6, a 57% drop) and produces `shallow = 2` \u2014 the only non-zero defect in the entire dataset. On reason, 4-7 also underinvests (1113 vs 1794 tokens, -38%). Meanwhile, 4-7 overcompensates on code (2244 vs 900 tokens, +149%), suggesting effort allocation has gone skewed rather than uniformly regressed.\n\nThe shallow defect on trace is not noise at k=1 \u2014 it lands at score 2, which is a hard hit on a single run, and it pairs with the thinking token gap rather than occurring independently. The pattern is: 4-7 fast-paths through trace without adequate reasoning depth, produces surface-level output, then burns the saved budget on code where it wasn't needed.\n\nopus-4-6 shows flat, clean execution across all three task types with zero defects and proportional effort.\n\n`4-6 - WORKING: balanced effort allocation, zero defects across all task types, shadow pass rate intact.`\n`4-7 - RISKY: shallow defect on trace correlates with 57% thinking token collapse, indicating effort misallocation rather than uniform capability.`"
+  },
+  "per_model": {
+    "opus-4-6": {
+      "mean_thinking_tokens": 1151.7619047619048,
+      "mean_duration_ms": 21360.333333333332,
+      "mean_blocks": 1,
+      "mean_depth": 3,
+      "mean_correctness": 0,
+      "defect_means": {
+        "servile": 0,
+        "overconfident": 0,
+        "lazy": 0,
+        "noise": 0,
+        "hedging": 0,
+        "drift": 0,
+        "shallow": 0,
+        "hallucination": 0
+      },
+      "total_cost": 0.31761125,
+      "shadow_pass_rate": 1.0
+    },
+    "opus-4-7": {
+      "mean_thinking_tokens": 1228.0,
+      "mean_duration_ms": 18833.333333333332,
+      "mean_blocks": 1,
+      "mean_depth": 3.6666666666666665,
+      "mean_correctness": 0,
+      "defect_means": {
+        "servile": 0,
+        "overconfident": 0,
+        "lazy": 0,
+        "noise": 0,
+        "hedging": 0,
+        "drift": 0,
+        "shallow": 0.6666666666666666,
+        "hallucination": 0
+      },
+      "total_cost": 0.40681375000000003,
+      "shadow_pass_rate": 1.0
+    }
+  },
+  "per_task": {
+    "opus-4-6": {
+      "reason": {
+        "thinking_tokens": 1794.5714285714287,
+        "duration_ms": 25390,
+        "thinking_blocks": 1,
+        "correctness_judge": 0,
+        "depth": 1,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.12150625000000001,
+        "evidence_samples": []
+      },
+      "trace": {
+        "thinking_tokens": 761.1428571428571,
+        "duration_ms": 15329,
+        "thinking_blocks": 1,
+        "correctness_judge": 0,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.09460299999999999,
+        "evidence_samples": []
+      },
+      "code": {
+        "thinking_tokens": 899.5714285714286,
+        "duration_ms": 23362,
+        "thinking_blocks": 1,
+        "correctness_judge": 0,
+        "depth": 8,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.101502,
+        "evidence_samples": []
+      }
+    },
+    "opus-4-7": {
+      "reason": {
+        "thinking_tokens": 1113.2857142857142,
+        "duration_ms": 17005,
+        "thinking_blocks": 1,
+        "correctness_judge": 0,
+        "depth": 1,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.13225375,
+        "evidence_samples": []
+      },
+      "trace": {
+        "thinking_tokens": 326.2857142857143,
+        "duration_ms": 9946,
+        "thinking_blocks": 1,
+        "correctness_judge": 0,
+        "depth": 2,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 2,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.11055425,
+        "evidence_samples": []
+      },
+      "code": {
+        "thinking_tokens": 2244.4285714285716,
+        "duration_ms": 29549,
+        "thinking_blocks": 1,
+        "correctness_judge": 0,
+        "depth": 8,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.16400575,
+        "evidence_samples": []
+      }
+    }
+  }
+}
