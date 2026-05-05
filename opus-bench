@@ -438,43 +438,44 @@ SCALES:
 - thinking_tokens: more = more reasoning effort
 - shadow_correct_rate: 1.0 = all programmatic checks passed
 
-Use ONLY the data below. No external references, no fabricated context. Do NOT mention cost or money.
+Use ONLY the data below. No external references, no fabricated context. Never mention cost, money, pricing, latency in dollars.
 
 DATA:
 ```json
 {data}
 ```
 
-Output EXACTLY in this format (English, no prose before or after):
-
-| metric | <model_a> | <model_b> | <model_c> |
-|---|---|---|---|
-| think tokens (mean) | <int> | <int> | <int> |
-| depth (mean) | <num/10> | <num/10> | <num/10> |
-| correctness (mean) | <num/10> | <num/10> | <num/10> |
-| shadow pass | <pct> | <pct> | <pct> |
-| top defect | <axis>=<score> | <axis>=<score> | <axis>=<score> |
-| weak task | <task>:<reason> | <task>:<reason> | <task>:<reason> |
-
-**Strengths**
-- <model_a>: <one sentence calling out the single strongest aspect with metric>
-- <model_b>: <one sentence>
-- <model_c>: <one sentence>
-
-USE: <{model_options} | tie>
-- <reason 1 citing a metric>
-- <reason 2 citing a metric>
+Output STRICTLY this JSON object - one object, no preamble, no markdown fences, no commentary after:
+{{
+  "metrics": {{
+    "<model_id>": {{
+      "think_tokens": <int>,
+      "depth": <float 0..10>,
+      "correctness": <float 0..10>,
+      "shadow_pass_pct": <int 0..100>,
+      "top_defect": "<axis>=<score>" | "none",
+      "weak_task": "<task>:<short why>" | "none"
+    }}
+  }},
+  "strengths": {{
+    "<model_id>": "<one sentence highlighting this model's strongest aspect with a metric>"
+  }},
+  "verdict": {{
+    "use": "<{model_options} | tie | none>",
+    "reasons": ["<one sentence citing a metric>", "<one sentence citing a metric>"]
+  }}
+}}
 
 Rules:
-- column headers must be the actual model ids in the JSON
-- "top defect" = the defect axis with the highest score for that model (skip if all zero)
-- "weak task" = the task where the model dropped the most (correctness, depth, or shadow); leave blank if all uniform
-- Pick the model with best correctness + depth + lowest defects. If essentially equal, USE: tie. If one is broken (correctness <5 or defect surge), pick the best of the rest. If all broken, USE: none and explain in the bullets.
-- Never mention cost, latency in dollars, or pricing.
-'''
+- "metrics" and "strengths" MUST contain one entry per model present in DATA.
+- Use the actual model ids from DATA as keys.
+- top_defect = the defect axis with the highest score for that model, formatted "<axis>=<num>"; "none" if all axes are zero.
+- weak_task = the task where the model dropped most on correctness or shadow, formatted "<task>:<short reason>"; "none" if uniform.
+- Pick best correctness + depth + lowest defects. Equal within 10% -> use="tie". One broken (correctness<5 OR severe defect surge) -> pick best of the rest. All broken -> use="none".'''
 
 def call_analyst(aggregates):
-    payload = json.dumps(aggregates, indent=2, ensure_ascii=False)
+    """Return parsed verdict dict from Sonnet, or None on failure."""
+    payload = json.dumps(aggregates, indent=2, ensure_ascii=False, default=str)
     prompt = ANALYST_TEMPLATE.format(
         n_models=len(models),
         n_tasks=len(tasks),
@@ -482,7 +483,6 @@ def call_analyst(aggregates):
         data=payload[:8000],
         model_options=" | ".join(models),
     )
-    # NB: explicit ban on external references is in ANALYST_TEMPLATE
     try:
         proc = subprocess.run(
             ["claude", "-p", prompt,
@@ -497,10 +497,132 @@ def call_analyst(aggregates):
         items = raw if isinstance(raw, list) else [raw]
         for item in reversed(items):
             if isinstance(item, dict) and item.get("type") == "result":
-                return item.get("result", "") or "(empty analyst output)"
-        return "(no analyst result)"
-    except Exception as e:
-        return f"(analyst call failed: {type(e).__name__})"
+                txt = item.get("result", "") or ""
+                m = re.search(r'\{.*"verdict".*\}', txt, re.DOTALL)
+                if m:
+                    try:
+                        return json.loads(m.group())
+                    except Exception:
+                        pass
+        return None
+    except Exception:
+        return None
+
+# -- Render helpers (gum + ANSI) ------------------------------------------
+
+ANSI_RE = re.compile(r'\033\[[0-9;]*m')
+
+def vlen(s):
+    return len(ANSI_RE.sub('', str(s)))
+
+def lpad(s, w):
+    s = str(s); return " " * max(0, w - vlen(s)) + s
+
+def rpad(s, w):
+    s = str(s); return s + " " * max(0, w - vlen(s))
+
+def gum_panel(content, args):
+    proc = subprocess.run(["gum", "style"] + args, input=content, capture_output=True, text=True)
+    return proc.stdout.rstrip("\n") if proc.returncode == 0 else content
+
+def fmt_metric(value, kind, maxlen=26):
+    if value is None: return "-"
+    if kind == "int":   return str(int(value))
+    if kind == "f1":    return f"{float(value):.1f}"
+    if kind == "pct":   return f"{int(value)}%"
+    if kind == "str":
+        s = str(value).strip()
+        if not s or s.lower() == "none":
+            return "-"
+        return s if len(s) <= maxlen else s[:maxlen - 1] + "..."
+    return str(value)
+
+def color_numeric(value, all_values, higher_better=True):
+    nums = [float(v) for v in all_values if isinstance(v, (int, float))]
+    if not nums or len(set(nums)) <= 1:
+        return None
+    best = max(nums) if higher_better else min(nums)
+    worst = min(nums) if higher_better else max(nums)
+    try:
+        v = float(value)
+    except Exception:
+        return None
+    if v == best:  return G
+    if v == worst: return R
+    return Y
+
+def render_metrics_panel(metrics, model_ids):
+    if not metrics: return None
+    rows = [
+        ("think tokens",    "think_tokens",    "int", True),
+        ("depth /10",       "depth",           "f1",  True),
+        ("correctness /10", "correctness",     "f1",  True),
+        ("shadow pass",     "shadow_pass_pct", "pct", True),
+        ("top defect",      "top_defect",      "str", False),
+        ("weak task",       "weak_task",       "str", False),
+    ]
+    name_w = max(len(label) for label, *_ in rows) + 2
+    # Per-column width based on longest content in that column
+    col_w = []
+    for mid in model_ids:
+        widest = len(mid)
+        for label, key, kind, _num in rows:
+            v = metrics.get(mid, {}).get(key)
+            widest = max(widest, len(fmt_metric(v, kind)))
+        col_w.append(max(14, widest + 2))
+
+    def header():
+        line = rpad(B + "metric" + N, name_w)
+        for i, mid in enumerate(model_ids):
+            line += lpad(B + C + mid + N, col_w[i])
+        return line
+
+    def sep():
+        s = D + "-" * (name_w - 2) + N + "  "
+        for i in range(len(model_ids)):
+            s += D + "-" * (col_w[i] - 2) + N + "  "
+        return s.rstrip()
+
+    out = [header(), sep()]
+    for label, key, kind, num in rows:
+        all_vals = [metrics.get(mid, {}).get(key) for mid in model_ids]
+        line = rpad(label, name_w)
+        for i, (mid, raw) in enumerate(zip(model_ids, all_vals)):
+            txt = fmt_metric(raw, kind)
+            if num and isinstance(raw, (int, float)):
+                col = color_numeric(raw, all_vals, higher_better=True)
+                if col: txt = col + txt + N
+            elif kind == "str":
+                if txt == "-":
+                    txt = G + txt + N
+                else:
+                    txt = R + txt + N
+            line += lpad(txt, col_w[i])
+        out.append(line)
+    body = "\n".join(out)
+    return gum_panel(body, ["--border", "rounded", "--padding", "1 2",
+                            "--border-foreground", "240", "--margin", "0 0"])
+
+def render_strengths_panel(strengths, model_ids):
+    if not strengths: return None
+    out = [B + "Strengths" + N, ""]
+    for mid in model_ids:
+        text = strengths.get(mid, "-")
+        out.append(f"  {C}{B}{mid}{N}")
+        out.append(f"    {text}")
+        out.append("")
+    body = "\n".join(out).rstrip()
+    return gum_panel(body, ["--border", "rounded", "--padding", "1 2",
+                            "--border-foreground", "240", "--margin", "0 0"])
+
+def render_verdict_panel(verdict):
+    use = verdict.get("use", "?")
+    reasons = verdict.get("reasons", []) or []
+    use_color = G if use not in ("tie", "none", "?") else Y
+    head = f"{B}USE  {use_color}{use}{N}"
+    body = head + "\n\n" + "\n".join(f"  {C}-{N} {r}" for r in reasons)
+    return gum_panel(body, ["--border", "double", "--padding", "1 2",
+                            "--border-foreground", "212", "--margin", "0 0", "--bold"])
 
 # -- Aggregate ------------------------------------------------------------
 
@@ -701,7 +823,7 @@ per_model_for_judge = {
     mt: {k: v for k, v in pm.items() if k not in ("total_cost",)}
     for mt, pm in per_model.items()
 }
-verdict_text = call_analyst({
+verdict_json = call_analyst({
     "k_runs": k_runs,
     "models": per_model_for_judge,
     "per_task": {mt: {t: {
@@ -715,12 +837,16 @@ verdict_text = call_analyst({
 })
 
 print()
-panel = subprocess.run(
-    ["gum", "style", "--border", "double", "--padding", "1 2",
-     "--border-foreground", "212", "--margin", "0 0"],
-    input=verdict_text.strip(), capture_output=True, text=True
-).stdout
-print(panel if panel.strip() else verdict_text)
+if verdict_json is None:
+    print(gum_panel(R + "Sonnet analyst failed to produce parseable JSON" + N,
+                    ["--border", "rounded", "--padding", "1 2", "--border-foreground", "196"]))
+else:
+    metrics_panel = render_metrics_panel(verdict_json.get("metrics", {}), model_tags)
+    strengths_panel = render_strengths_panel(verdict_json.get("strengths", {}), model_tags)
+    verdict_panel = render_verdict_panel(verdict_json.get("verdict", {}))
+    if metrics_panel: print(metrics_panel)
+    if strengths_panel: print(strengths_panel)
+    if verdict_panel: print(verdict_panel)
 
 # -- Closing note ---------------------------------------------------------
 
@@ -737,7 +863,7 @@ save = {
         "date": datetime.now().isoformat(),
         "models": models, "tasks": tasks, "k_runs": k_runs,
         "judge_model": judge_model,
-        "verdict": verdict_text,
+        "verdict": verdict_json,
     },
     "per_model": per_model,
     "per_task": {mt: agg[mt] for mt in model_tags},
