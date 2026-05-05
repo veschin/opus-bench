@@ -430,7 +430,7 @@ def call_polyrubric(task_text, response_text):
 
 # -- Final analyst --------------------------------------------------------
 
-ANALYST_TEMPLATE = '''You analyze a Claude Opus + Z.AI benchmark. {n_models} models, {n_tasks} tasks x {k} runs each. The same Sonnet judge evaluated all models, so judge bias is uniform across them. Anthropic Opus and Z.AI GLM are evaluated head-to-head as peer reasoning models.
+ANALYST_TEMPLATE = '''You analyze a Claude Opus + Z.AI benchmark. {n_models} models, {n_tasks} tasks x {k} runs each. Same Sonnet judge for all targets so judge bias is uniform.
 
 SCALES:
 - correctness, depth: 0-10, HIGHER = better
@@ -438,20 +438,39 @@ SCALES:
 - thinking_tokens: more = more reasoning effort
 - shadow_correct_rate: 1.0 = all programmatic checks passed
 
-Pick which model to USE today. Use ONLY the JSON below. No external references, no fabricated context.
+Use ONLY the data below. No external references, no fabricated context. Do NOT mention cost or money.
 
 DATA:
 ```json
 {data}
 ```
 
-Output EXACTLY this format (no prose before, no prose after, no markdown fences):
-USE: <{model_options} | tie>
-- <one-sentence reason citing a metric>
-- <one-sentence reason citing a metric>
-- <optional third reason>
+Output EXACTLY in this format (English, no prose before or after):
 
-Pick the model with better thinking effort + depth + lower defects + maintained correctness. If essentially equal, USE: tie. If one is clearly broken (correctness drop, severe defect surge), pick the best of the rest. If all broken, USE: none and explain.
+| metric | <model_a> | <model_b> | <model_c> |
+|---|---|---|---|
+| think tokens (mean) | <int> | <int> | <int> |
+| depth (mean) | <num/10> | <num/10> | <num/10> |
+| correctness (mean) | <num/10> | <num/10> | <num/10> |
+| shadow pass | <pct> | <pct> | <pct> |
+| top defect | <axis>=<score> | <axis>=<score> | <axis>=<score> |
+| weak task | <task>:<reason> | <task>:<reason> | <task>:<reason> |
+
+**Strengths**
+- <model_a>: <one sentence calling out the single strongest aspect with metric>
+- <model_b>: <one sentence>
+- <model_c>: <one sentence>
+
+USE: <{model_options} | tie>
+- <reason 1 citing a metric>
+- <reason 2 citing a metric>
+
+Rules:
+- column headers must be the actual model ids in the JSON
+- "top defect" = the defect axis with the highest score for that model (skip if all zero)
+- "weak task" = the task where the model dropped the most (correctness, depth, or shadow); leave blank if all uniform
+- Pick the model with best correctness + depth + lowest defects. If essentially equal, USE: tie. If one is broken (correctness <5 or defect surge), pick the best of the rest. If all broken, USE: none and explain in the bullets.
+- Never mention cost, latency in dollars, or pricing.
 '''
 
 def call_analyst(aggregates):
@@ -677,9 +696,14 @@ if verbose:
 # -- Sonnet final analyst -------------------------------------------------
 
 vprint(f"\n  {D}Calling Sonnet analyst for verdict...{N}")
+# Strip cost/money fields - the verdict must not reference them
+per_model_for_judge = {
+    mt: {k: v for k, v in pm.items() if k not in ("total_cost",)}
+    for mt, pm in per_model.items()
+}
 verdict_text = call_analyst({
     "k_runs": k_runs,
-    "models": per_model,
+    "models": per_model_for_judge,
     "per_task": {mt: {t: {
         "thinking_tokens": agg[mt][t]["thinking_tokens"],
         "duration_ms": agg[mt][t]["duration_ms"],
