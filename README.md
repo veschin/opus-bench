@@ -73,8 +73,21 @@ Quick check that everything is wired up:
 for c in claude gum python3; do command -v "$c" >/dev/null && echo "ok  $c -> $(command -v $c)" || echo "MISSING  $c"; done
 ```
 
-You also need an Anthropic account with sufficient quota for both Opus
-and Sonnet - the bench makes about 73 API calls per full run.
+You also need:
+
+- An Anthropic account with sufficient quota for Opus targets and the
+  Sonnet judge.
+- A Z.AI API key for the GLM-5.1 target. The script reads it from
+  `~/.config/GoLeM/zai_api_key` (where the `glm` wrapper stores it).
+  When a `glm-*` model is requested the script invokes `claude -p` with
+  `ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic` and that key; the
+  `glm` wrapper itself is bypassed because its current build does not
+  parse the latest Claude Code output format. If the key file is
+  missing, the GLM target is skipped per task and recorded as
+  `_bench_error`.
+
+Per full run the bench makes about 109 API calls (3 targets x 6 tasks
+x 3 runs + 54 Sonnet polyrubric + 1 analyst).
 
 ## Usage
 
