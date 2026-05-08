@@ -9,7 +9,7 @@ command -v gum >/dev/null 2>&1 || { echo "gum not found"; exit 1; }
 command -v claude >/dev/null 2>&1 || { echo "claude CLI not found"; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "python3 not found"; exit 1; }
 
-BENCH_DIR="${HOME}/ai/bench"
+BENCH_DIR="$(cd "$(dirname "$0")" && pwd)"
 RESULTS_DIR="${BENCH_DIR}/results"
 DATE_TAG=$(date +%Y%m%d_%H%M%S)
 MODELS=("claude-opus-4-6" "claude-opus-4-7" "glm-5.1")

@@ -7,7 +7,7 @@ ok()   { printf "  ${G}[+]${N} %s\n" "$1"; }
 fail() { printf "  ${R}[-]${N} %s\n" "$1"; }
 warn() { printf "  ${Y}[~]${N} %s\n" "$1"; }
 
-BENCH_DIR="${HOME}/ai/bench"
+BENCH_DIR="${BENCH_DIR:-$(pwd)}"
 REPO_RAW="https://raw.githubusercontent.com/veschin/opus-bench/main"
 
 printf "\n${B}  opus-bench installer${N}\n\n"
