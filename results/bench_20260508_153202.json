@@ -1,0 +1,305 @@
+{
+  "_meta": {
+    "version": 3,
+    "date": "2026-05-08T15:34:15.754125",
+    "models": [
+      "claude-opus-4-6",
+      "claude-opus-4-7",
+      "glm-5.1"
+    ],
+    "tasks": [
+      "reason",
+      "trace",
+      "code"
+    ],
+    "k_runs": 1,
+    "judge_model": "claude-sonnet-4-6",
+    "verdict": {
+      "metrics": {
+        "opus-4-6": {
+          "think_tokens": 1112,
+          "depth": 6.67,
+          "correctness": 10,
+          "shadow_pass_pct": 100,
+          "top_defect": "none",
+          "weak_task": "none"
+        },
+        "opus-4-7": {
+          "think_tokens": 736,
+          "depth": 6.0,
+          "correctness": 10,
+          "shadow_pass_pct": 100,
+          "top_defect": "none",
+          "weak_task": "none"
+        },
+        "glm-5.1": {
+          "think_tokens": 0,
+          "depth": 0.0,
+          "correctness": 0,
+          "shadow_pass_pct": 0,
+          "top_defect": "none",
+          "weak_task": "none"
+        }
+      },
+      "strengths": {
+        "opus-4-6": "Highest mean depth (6.67/10) paired with the most thinking effort (1112 tokens mean), achieving perfect correctness and 100% shadow pass across all tasks.",
+        "opus-4-7": "Fastest execution (14 371 ms mean) while fully matching opus-4-6 on correctness (10/10) and shadow pass rate (100%) with zero defects.",
+        "glm-5.1": "Zero defect axes recorded \u2014 vacuously true, as no valid responses were generated in any task."
+      },
+      "verdict": {
+        "use": "tie",
+        "reasons": [
+          "Both models achieve 10/10 correctness and 100% shadow pass rate with zero defects across all three tasks.",
+          "Depth gap between opus-4-6 (6.67) and opus-4-7 (6.0) is \u224810%, at the tie threshold, making neither model clearly superior."
+        ]
+      }
+    }
+  },
+  "per_model": {
+    "opus-4-6": {
+      "mean_thinking_tokens": 1112.1904761904761,
+      "mean_duration_ms": 22942,
+      "mean_blocks": 1,
+      "mean_depth": 6.666666666666667,
+      "mean_correctness": 10,
+      "defect_means": {
+        "servile": 0,
+        "overconfident": 0,
+        "lazy": 0,
+        "noise": 0,
+        "hedging": 0,
+        "drift": 0,
+        "shallow": 0,
+        "hallucination": 0
+      },
+      "total_cost": 0.3326825,
+      "shadow_pass_rate": 1.0
+    },
+    "opus-4-7": {
+      "mean_thinking_tokens": 736.0,
+      "mean_duration_ms": 14371.333333333334,
+      "mean_blocks": 0.6666666666666666,
+      "mean_depth": 6,
+      "mean_correctness": 10,
+      "defect_means": {
+        "servile": 0,
+        "overconfident": 0,
+        "lazy": 0,
+        "noise": 0,
+        "hedging": 0,
+        "drift": 0,
+        "shallow": 0,
+        "hallucination": 0
+      },
+      "total_cost": 0.33944,
+      "shadow_pass_rate": 1.0
+    },
+    "glm-5.1": {
+      "mean_thinking_tokens": 0,
+      "mean_duration_ms": 0,
+      "mean_blocks": 0,
+      "mean_depth": 0,
+      "mean_correctness": 0,
+      "defect_means": {
+        "servile": 0,
+        "overconfident": 0,
+        "lazy": 0,
+        "noise": 0,
+        "hedging": 0,
+        "drift": 0,
+        "shallow": 0,
+        "hallucination": 0
+      },
+      "total_cost": 0,
+      "shadow_pass_rate": 0
+    }
+  },
+  "per_task": {
+    "opus-4-6": {
+      "reason": {
+        "thinking_tokens": 1454.7142857142858,
+        "duration_ms": 27497,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 10,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.12001,
+        "evidence_samples": []
+      },
+      "trace": {
+        "thinking_tokens": 836.5714285714286,
+        "duration_ms": 18465,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 10,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.10194675,
+        "evidence_samples": []
+      },
+      "code": {
+        "thinking_tokens": 1045.2857142857142,
+        "duration_ms": 22864,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.11072575,
+        "evidence_samples": []
+      }
+    },
+    "opus-4-7": {
+      "reason": {
+        "thinking_tokens": 1465.2857142857142,
+        "duration_ms": 20660,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 9,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.14297625,
+        "evidence_samples": []
+      },
+      "trace": {
+        "thinking_tokens": 663.1428571428571,
+        "duration_ms": 14377,
+        "thinking_blocks": 1,
+        "correctness_judge": 10,
+        "depth": 9,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.12193175000000002,
+        "evidence_samples": []
+      },
+      "code": {
+        "thinking_tokens": 79.57142857142858,
+        "duration_ms": 8077,
+        "thinking_blocks": 0,
+        "correctness_judge": 10,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 1.0,
+        "cost_sum": 0.074532,
+        "evidence_samples": []
+      }
+    },
+    "glm-5.1": {
+      "reason": {
+        "thinking_tokens": 0,
+        "duration_ms": 0,
+        "thinking_blocks": 0,
+        "correctness_judge": 0,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 0.0,
+        "cost_sum": 0,
+        "evidence_samples": []
+      },
+      "trace": {
+        "thinking_tokens": 0,
+        "duration_ms": 0,
+        "thinking_blocks": 0,
+        "correctness_judge": 0,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 0.0,
+        "cost_sum": 0,
+        "evidence_samples": []
+      },
+      "code": {
+        "thinking_tokens": 0,
+        "duration_ms": 0,
+        "thinking_blocks": 0,
+        "correctness_judge": 0,
+        "depth": 0,
+        "defects": {
+          "servile": 0,
+          "overconfident": 0,
+          "lazy": 0,
+          "noise": 0,
+          "hedging": 0,
+          "drift": 0,
+          "shallow": 0,
+          "hallucination": 0
+        },
+        "shadow_correct_rate": 0.0,
+        "cost_sum": 0,
+        "evidence_samples": []
+      }
+    }
+  }
+}
